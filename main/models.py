@@ -21,6 +21,10 @@ class User(models.Model):
     def __str__(self) -> str:
         return self.name
 
+    @property
+    def is_authenticated(self):
+        return True
+
 
 class Customer(models.Model):
     name = models.CharField(max_length=150)

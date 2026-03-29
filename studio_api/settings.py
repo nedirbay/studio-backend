@@ -25,7 +25,7 @@ SECRET_KEY = 'django-insecure-=*&1%5djpachw=-=1)k_ao*$hpbgtz=ihzk*dtj(6l3k@ogv75
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ["*", "localhost", "127.0.0.1", "testserver"]
 
 
 # Application definition
@@ -37,6 +37,8 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'rest_framework',
+    'drf_spectacular',
     'main',
 ]
 
@@ -110,6 +112,22 @@ AUTH_PASSWORD_VALIDATORS = [
 LANGUAGE_CODE = 'en-us'
 
 TIME_ZONE = 'Asia/Ashgabat'
+
+REST_FRAMEWORK = {
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'main.auth.StudioJWTAuthentication',
+    ),
+    'DEFAULT_PERMISSION_CLASSES': (
+        'rest_framework.permissions.IsAuthenticated',
+    ),
+}
+
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Doglanlar Studio API',
+    'DESCRIPTION': 'Backend API for customers, appointments, orders, equipment, expenses, and auth.',
+    'VERSION': '1.0.0',
+}
 
 USE_I18N = True
 
