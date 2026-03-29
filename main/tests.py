@@ -31,6 +31,7 @@ class ApiEndpointsTests(TestCase):
             phone="555-000",
         )
         self.jwt = self._issue_jwt(self.user)
+        self.refresh = self._issue_refresh(self.user)
         # seed customer and appointment
         self.customer = Customer.objects.create(name="Alice", phone="111")
         self.appt = Appointment.objects.create(
@@ -43,6 +44,10 @@ class ApiEndpointsTests(TestCase):
     def _issue_jwt(self, user):
         from main.views import _issue_jwt
         return _issue_jwt(user)
+
+    def _issue_refresh(self, user):
+        from main.views import _issue_refresh_jwt
+        return _issue_refresh_jwt(user)
 
     def auth_headers(self):
         return {"HTTP_AUTHORIZATION": f"Bearer {self.jwt}"}
@@ -57,6 +62,19 @@ class ApiEndpointsTests(TestCase):
         payload = resp.json()
         self.assertEqual(payload["id"], self.user.id)
         self.assertEqual(payload["role"], "admin")
+        self.assertIn("jwt", payload)
+        self.assertIn("refresh", payload)
+
+    def test_auth_refresh(self):
+        resp = self.client.post(
+            "/api/auth/refresh",
+            data=json.dumps({"refresh": self.refresh}),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertIn("jwt", data)
+        self.assertIn("refresh", data)
 
     def test_auth_login_invalid(self):
         resp = self.client.post(

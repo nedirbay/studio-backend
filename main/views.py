@@ -64,11 +64,20 @@ def _user_from_request(request):
     return auth_service.login(token)
 
 
-def _issue_jwt(user: User):
-    exp = datetime.utcnow() + timedelta(days=7)
-    payload = {"user_id": user.id, "role": user.role.name if user.role else None, "exp": exp}
+def _issue_jwt(user: User, minutes: int = 30, token_type: str = "access"):
+    exp = datetime.utcnow() + timedelta(minutes=minutes)
+    payload = {
+        "type": token_type,
+        "user_id": user.id,
+        "role": user.role.name if user.role else None,
+        "exp": exp,
+    }
     token = jwt.encode(payload, settings.SECRET_KEY, algorithm="HS256")
     return token
+
+
+def _issue_refresh_jwt(user: User, days: int = 7):
+    return _issue_jwt(user, minutes=days * 24 * 60, token_type="refresh")
 
 
 def _customer_dict(customer: Customer):
@@ -154,6 +163,7 @@ def auth_login(request):
     if not user:
         return Response({"error": "invalid token"}, status=status.HTTP_401_UNAUTHORIZED)
     jwt_token = _issue_jwt(user)
+    refresh = _issue_refresh_jwt(user)
     return Response(
         {
             "id": user.id,
@@ -163,6 +173,7 @@ def auth_login(request):
             "phone": user.phone,
             "avatar_path": user.avatar_path,
             "jwt": jwt_token,
+            "refresh": refresh,
         }
     )
 
@@ -196,6 +207,28 @@ def auth_profile(request):
         update_data["salary"] = Decimal(str(update_data["salary"]))
     updated = auth_service.update_profile(user.id, update_data)
     return Response({"updated": updated})
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def auth_refresh(request):
+    refresh_token = request.data.get("refresh")
+    if not refresh_token:
+        return Response({"error": "refresh token required"}, status=status.HTTP_400_BAD_REQUEST)
+    try:
+        payload = jwt.decode(refresh_token, settings.SECRET_KEY, algorithms=["HS256"])
+        if payload.get("type") != "refresh":
+            return Response({"error": "invalid token type"}, status=status.HTTP_400_BAD_REQUEST)
+        user = User.objects.filter(id=payload.get("user_id"), is_active=True).first()
+        if not user:
+            return Response({"error": "user not found"}, status=status.HTTP_401_UNAUTHORIZED)
+        new_access = _issue_jwt(user)
+        new_refresh = _issue_refresh_jwt(user)
+        return Response({"jwt": new_access, "refresh": new_refresh})
+    except jwt.ExpiredSignatureError:
+        return Response({"error": "refresh expired"}, status=status.HTTP_401_UNAUTHORIZED)
+    except jwt.PyJWTError:
+        return Response({"error": "invalid token"}, status=status.HTTP_400_BAD_REQUEST)
 
 
 @api_view(["GET", "POST"])

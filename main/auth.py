@@ -20,6 +20,8 @@ class StudioJWTAuthentication(authentication.BaseAuthentication):
             payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
         except jwt.PyJWTError:
             raise exceptions.AuthenticationFailed("Invalid token")
+        if payload.get("type") != "access":
+            raise exceptions.AuthenticationFailed("Access token required")
         user_id = payload.get("user_id")
         if not user_id:
             raise exceptions.AuthenticationFailed("Invalid payload")
