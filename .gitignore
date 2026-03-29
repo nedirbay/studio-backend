@@ -1,0 +1,24 @@
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+*.pyc
+
+# Virtual environments
+venv/
+.env
+.venv/
+
+# Django
+*.log
+*.pot
+*.py,cover
+local_settings.py
+db.sqlite3
+
+# IDE/editor
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
