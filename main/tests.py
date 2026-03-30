@@ -4,6 +4,9 @@ from decimal import Decimal
 
 from django.test import Client, TestCase
 
+from auth.models import Role, User
+from auth.views import _issue_jwt as issue_jwt
+
 from .models import (
     Appointment,
     Customer,
@@ -12,10 +15,8 @@ from .models import (
     Expense,
     Order,
     OrderDay,
-    Role,
-    User,
 )
-from .services import AuthService, OrderService
+from .services import OrderService
 
 
 class ApiEndpointsTests(TestCase):
@@ -31,7 +32,6 @@ class ApiEndpointsTests(TestCase):
             phone="555-000",
         )
         self.jwt = self._issue_jwt(self.user)
-        self.refresh = self._issue_refresh(self.user)
         # seed customer and appointment
         self.customer = Customer.objects.create(name="Alice", phone="111")
         self.appt = Appointment.objects.create(
@@ -42,64 +42,10 @@ class ApiEndpointsTests(TestCase):
         )
 
     def _issue_jwt(self, user):
-        from main.views import _issue_jwt
-        return _issue_jwt(user)
-
-    def _issue_refresh(self, user):
-        from main.views import _issue_refresh_jwt
-        return _issue_refresh_jwt(user)
+        return issue_jwt(user)
 
     def auth_headers(self):
         return {"HTTP_AUTHORIZATION": f"Bearer {self.jwt}"}
-
-    def test_auth_login(self):
-        resp = self.client.post(
-            "/api/auth/login",
-            data=json.dumps({"token": "tok123"}),
-            content_type="application/json",
-        )
-        self.assertEqual(resp.status_code, 200)
-        payload = resp.json()
-        self.assertEqual(payload["id"], self.user.id)
-        self.assertEqual(payload["role"], "admin")
-        self.assertIn("jwt", payload)
-        self.assertIn("refresh", payload)
-
-    def test_auth_refresh(self):
-        resp = self.client.post(
-            "/api/auth/refresh",
-            data=json.dumps({"refresh": self.refresh}),
-            content_type="application/json",
-        )
-        self.assertEqual(resp.status_code, 200)
-        data = resp.json()
-        self.assertIn("jwt", data)
-        self.assertIn("refresh", data)
-
-    def test_auth_login_invalid(self):
-        resp = self.client.post(
-            "/api/auth/login",
-            data=json.dumps({"token": "bad"}),
-            content_type="application/json",
-        )
-        self.assertEqual(resp.status_code, 401)
-
-    def test_auth_me_and_profile(self):
-        # me
-        resp = self.client.get("/api/auth/me", **self.auth_headers())
-        self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.json()["name"], "Tester")
-        # profile update
-        resp = self.client.put(
-            "/api/auth/profile",
-            data=json.dumps({"phone": "999", "salary": 1500}),
-            content_type="application/json",
-            **self.auth_headers(),
-        )
-        self.assertEqual(resp.status_code, 200)
-        self.user.refresh_from_db()
-        self.assertEqual(self.user.phone, "999")
-        self.assertEqual(self.user.salary, Decimal("1500"))
 
     def test_customers_list_and_create(self):
         resp = self.client.get("/api/customers", **self.auth_headers())
@@ -321,12 +267,6 @@ class ServiceLayerTests(TestCase):
             paid_amount=Decimal("40.00"),
         )
         self.expense = Expense.objects.create(amount=Decimal("10.00"), date=date(2025, 1, 5), description="test")
-
-    def test_auth_change_token(self):
-        svc = AuthService()
-        ok = svc.change_token(self.user.id, "tok123", "tok999")
-        self.assertTrue(ok)
-        self.assertEqual(User.objects.get(id=self.user.id).token, "tok999")
 
     def test_order_financial_stats(self):
         svc = OrderService()

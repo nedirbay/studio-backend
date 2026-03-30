@@ -39,6 +39,8 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'drf_spectacular',
+    'auth.apps.AuthConfig',
+    'blog',
     'main',
 ]
 
@@ -116,7 +118,7 @@ TIME_ZONE = 'Asia/Ashgabat'
 REST_FRAMEWORK = {
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        'main.auth.StudioJWTAuthentication',
+        'auth.auth.StudioJWTAuthentication',
     ),
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',

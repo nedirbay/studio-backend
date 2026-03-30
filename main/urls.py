@@ -5,10 +5,6 @@ from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 from . import views
 
 urlpatterns = [
-    path("api/auth/login", views.auth_login),
-    path("api/auth/me", views.auth_me),
-    path("api/auth/profile", views.auth_profile),
-    path("api/auth/refresh", views.auth_refresh),
     path("api/customers", views.customers),
     path("api/customers/<int:customer_id>", views.customer_detail),
     path("api/appointments", views.appointments),

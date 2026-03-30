@@ -1,9 +1,8 @@
 import jwt
 from django.conf import settings
-from rest_framework import authentication
-from rest_framework import exceptions
+from rest_framework import authentication, exceptions
 
-from .models import User
+from auth.models import User
 
 
 class StudioJWTAuthentication(authentication.BaseAuthentication):
