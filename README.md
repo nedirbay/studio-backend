@@ -1,6 +1,6 @@
 # Doganlar Studio Backend (Django + DRF)
 
-Backend for customers, appointments, orders, equipment, expenses, gallery, and basic auth with JWT. PostgreSQL is used as the default database.
+Backend for customers, appointments, orders, equipment, expenses, gallery, blog, commerce, and auth with JWT. PostgreSQL is used as the default database.
 
 ## Stack
 
@@ -51,10 +51,17 @@ Backend for customers, appointments, orders, equipment, expenses, gallery, and b
 - Orders: `GET/POST /api/orders`, `GET/PUT/DELETE /api/orders/{id}`, `GET /api/orders/staff/{userId}`
 - Equipment: `GET/POST /api/equipments`, `GET /api/equipments/assigned`
 - Expenses & Stats: `GET/POST /api/expenses`, `GET /api/stats/financial`
+- Blog: `GET/POST /api/blogs`, `GET/PUT/DELETE /api/blogs/{id}` (supports multiple images/videos per post)
+- Commerce:
+  - Categories: `GET/POST /api/categories`
+  - Products: `GET/POST /api/products`, `GET/PUT/DELETE /api/products/{id}` (supports multiple images/videos per product)
 
 ## Models (summary)
 
-- Customer, Appointment, User, Role, GalleryItem, Equipment, EquipmentAssignment, Order, OrderDay, OrderStaff, Expense.
+- Auth: Role, User (moved to `auth` app; JWT auth class lives there)
+- Core: Customer, Appointment, GalleryItem, Equipment, EquipmentAssignment, Order, OrderDay, OrderStaff, Expense
+- Blog: BlogPost, BlogMedia (many images/videos per post)
+- Commerce: Category, Product, ProductMedia (many images/videos per product)
 
 ## Testing
 
@@ -62,7 +69,11 @@ Backend for customers, appointments, orders, equipment, expenses, gallery, and b
   ```bash
   python manage.py test
   ```
-- Current suite covers auth (login/refresh/me/profile), CRUD flows for customers/appointments/orders/equipment/expenses, financial stats, and service-layer token change/stats.
+- Current suite covers:
+  - Auth (login/refresh/me/profile, token change)
+  - CRUD flows for customers, appointments, orders (incl. staff filter), equipment, expenses, financial stats
+  - Blog endpoints (list/create/update/delete with multiple media)
+  - Commerce endpoints (categories, products with multiple media)
 
 ## Notes / Deploy
 

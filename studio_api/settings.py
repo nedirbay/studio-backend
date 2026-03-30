@@ -41,6 +41,7 @@ INSTALLED_APPS = [
     'drf_spectacular',
     'auth.apps.AuthConfig',
     'blog',
+    'commerce',
     'main',
 ]
 
