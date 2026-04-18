@@ -4,8 +4,8 @@ from decimal import Decimal
 
 from django.test import Client, TestCase
 
-from auth.models import Role, User
-from auth.views import _issue_jwt as issue_jwt
+from identity.models import Role, User
+
 
 from .models import (
     Appointment,

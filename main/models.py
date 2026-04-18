@@ -1,7 +1,7 @@
 from django.db import models
 from django.utils import timezone
 
-from auth.models import Role, User
+from identity.models import Role, User
 
 
 class Customer(models.Model):

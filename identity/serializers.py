@@ -2,9 +2,11 @@ from rest_framework import serializers
 from .models import User
 
 class UserSerializer(serializers.ModelSerializer):
+    role_name = serializers.CharField(source='role.name', read_only=True)
+    
     class Meta:
         model = User
-        fields = ('id', 'username', 'email', 'phone', 'salary', 'avatar_path')
+        fields = ('id', 'username', 'email', 'phone', 'salary', 'avatar_path', 'role_name', 'is_superuser')
 
 class UserRegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)

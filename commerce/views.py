@@ -3,7 +3,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
-from commerce.models import Category, Product, ProductMedia, Brand
+from commerce.models import Category, Product, ProductMedia, Brand, Review
 from commerce.serializers import CategorySerializer, ProductSerializer
 from commerce.services import CategoryService, ProductService
 
@@ -52,6 +52,18 @@ def _product_dict(prod: Product):
         "category_id": prod.category_id,
         "category_name": prod.category.name if prod.category else None,
         "media": [_media_dict(m) for m in prod.media.all()],
+    }
+
+def _review_dict(review: Review):
+    return {
+        "id": review.id,
+        "user_id": review.user_id,
+        "userName": review.user.username,
+        "rating": review.rating,
+        "title": review.title,
+        "content": review.content,
+        "createdAt": review.created_at.isoformat(),
+        "helpful": 0 # Not implemented in DB yet, but for frontend compatibility
     }
 
 
@@ -122,3 +134,33 @@ def product_detail(request, product_id: int):
 @permission_classes([AllowAny])
 def brands(request):
     return Response([_brand_dict(b) for b in Brand.objects.all()])
+
+
+@api_view(["GET", "POST"])
+@permission_classes([AllowAny])
+def product_reviews(request, product_id: int):
+    if request.method == "GET":
+        reviews = Review.objects.filter(product_id=product_id).select_related('user').order_by('-created_at')
+        return Response([_review_dict(r) for r in reviews])
+    
+    # POST - Add Review
+    if not request.user.is_authenticated:
+        return Response({"error": "Login gerek"}, status=status.HTTP_401_UNAUTHORIZED)
+    
+    data = request.data
+    rating = data.get("rating", 5)
+    title = data.get("title", "")
+    content = data.get("content")
+
+    if not content:
+        return Response({"error": "Teswir ýazyň"}, status=status.HTTP_400_BAD_REQUEST)
+
+    review = Review.objects.create(
+        product_id=product_id,
+        user=request.user,
+        rating=rating,
+        title=title,
+        content=content
+    )
+    
+    return Response(_review_dict(review), status=status.HTTP_201_CREATED)

@@ -8,7 +8,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ('main', '0002_admin_user'),
-        ('studio_auth', '0001_initial'),
+        ('identity', '0001_initial'),
     ]
 
     operations = [
@@ -45,12 +45,12 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='equipmentassignment',
             name='user',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='equipments', to='studio_auth.user'),
+            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='equipments', to='identity.user'),
         ),
         migrations.AlterField(
             model_name='orderstaff',
             name='user',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='order_assignments', to='studio_auth.user'),
+            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='order_assignments', to='identity.user'),
         ),
         migrations.DeleteModel(
             name='Role',

@@ -8,3 +8,6 @@ urlpatterns = [
     path("brands", views.brands),
     path("products/<int:product_id>", views.product_detail),
 ]
+urlpatterns += [
+    path("products/<int:product_id>/reviews", views.product_reviews),
+]

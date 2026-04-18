@@ -55,3 +55,25 @@ class ProductMedia(models.Model):
 
     def __str__(self) -> str:
         return f"{self.kind} for {self.product_id}"
+
+class Review(models.Model):
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="product_reviews")
+    user = models.ForeignKey('identity.User', on_delete=models.CASCADE, related_name="user_reviews")
+    rating = models.IntegerField(default=5)
+    title = models.CharField(max_length=150, blank=True, null=True)
+    content = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Review for {self.product.name} by {self.user.username}"
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        # Update product rating and review count
+        all_reviews = Review.objects.filter(product=self.product)
+        count = all_reviews.count()
+        avg_rating = sum([r.rating for r in all_reviews]) / count if count > 0 else 5.0
+        
+        self.product.rating = avg_rating
+        self.product.reviews = count
+        self.product.save(update_fields=['rating', 'reviews'])
