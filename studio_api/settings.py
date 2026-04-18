@@ -40,14 +40,19 @@ INSTALLED_APPS = [
     'rest_framework',
     'drf_spectacular',
     'auth.apps.AuthConfig',
+    'identity',
     'blog',
     'commerce',
     'main',
+    'corsheaders',
 ]
+
+AUTH_USER_MODEL = 'identity.User'
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -56,6 +61,8 @@ MIDDLEWARE = [
 ]
 
 ROOT_URLCONF = 'studio_api.urls'
+
+CORS_ALLOW_ALL_ORIGINS = True
 
 TEMPLATES = [
     {

@@ -113,3 +113,29 @@ class EquipmentAssignment(models.Model):
 
     def __str__(self) -> str:
         return f"{self.equipment.name} -> {self.user.name}"
+
+
+class Banner(models.Model):
+    title = models.CharField(max_length=200)
+    subtitle = models.CharField(max_length=200, null=True, blank=True)
+    description = models.TextField(null=True, blank=True)
+    image_url = models.CharField(max_length=255)
+    cta_text = models.CharField(max_length=50, default="Söwda et")
+    bg_color = models.CharField(max_length=100, default="from-red-900/80")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self) -> str:
+        return self.title
+
+
+class Promo(models.Model):
+    title = models.CharField(max_length=200)
+    subtitle = models.CharField(max_length=200, null=True, blank=True)
+    badge = models.CharField(max_length=100, null=True, blank=True)
+    image_url = models.CharField(max_length=255)
+    link_url = models.CharField(max_length=255, default="#")
+    bg_gradient = models.CharField(max_length=100, default="from-blue-900/80")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self) -> str:
+        return self.title

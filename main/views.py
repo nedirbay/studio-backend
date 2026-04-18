@@ -2,10 +2,11 @@ from decimal import Decimal
 
 from django.utils.dateparse import parse_date
 from rest_framework import status
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
-from .models import Appointment, Customer, Equipment, Expense, Order, OrderDay, OrderStaff
+from .models import Appointment, Customer, Equipment, Expense, Order, OrderDay, OrderStaff, Banner, Promo
 from .services import AppointmentService, CustomerService, EquipmentService, ExpenseService, OrderService
 
 customer_service = CustomerService()
@@ -84,6 +85,30 @@ def _expense_dict(exp: Expense):
         "date": exp.date.isoformat(),
         "description": exp.description,
         "created_at": exp.created_at.isoformat(),
+    }
+
+
+def _banner_dict(banner: Banner):
+    return {
+        "id": banner.id,
+        "title": banner.title,
+        "subtitle": banner.subtitle,
+        "description": banner.description,
+        "image": banner.image_url,
+        "ctaText": banner.cta_text,
+        "bgColor": banner.bg_color,
+    }
+
+
+def _promo_dict(promo: Promo):
+    return {
+        "id": promo.id,
+        "title": promo.title,
+        "subtitle": promo.subtitle,
+        "badge": promo.badge,
+        "image": promo.image_url,
+        "link": promo.link_url,
+        "bgGradient": promo.bg_gradient,
     }
 
 
@@ -309,3 +334,15 @@ def financial_stats(request):
             "net": float(stats.net),
         }
     )
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def banners(request):
+    return Response([_banner_dict(b) for b in Banner.objects.all()])
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def promos(request):
+    return Response([_promo_dict(p) for p in Promo.objects.all()])

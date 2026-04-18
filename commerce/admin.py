@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from commerce.models import Category, Product, ProductMedia
+from commerce.models import Category, Product, ProductMedia, Brand
 
 
 @admin.register(Category)
@@ -20,3 +20,10 @@ class ProductAdmin(admin.ModelAdmin):
     list_filter = ("category", "instock")
     search_fields = ("name", "marka")
     inlines = [ProductMediaInline]
+
+
+@admin.register(Brand)
+class BrandAdmin(admin.ModelAdmin):
+    list_display = ("name", "slug", "created_at")
+    search_fields = ("name",)
+    prepopulated_fields = {"slug": ("name",)}

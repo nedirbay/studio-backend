@@ -3,7 +3,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
-from commerce.models import Category, Product, ProductMedia
+from commerce.models import Category, Product, ProductMedia, Brand
 from commerce.serializers import CategorySerializer, ProductSerializer
 from commerce.services import CategoryService, ProductService
 
@@ -12,19 +12,41 @@ product_service = ProductService()
 
 
 def _category_dict(cat: Category):
-    return {"id": cat.id, "name": cat.name, "created_at": cat.created_at.isoformat()}
+    return {
+        "id": cat.id, 
+        "name": cat.name, 
+        "slug": cat.slug,
+        "icon": cat.icon,
+        "count": cat.count,
+        "created_at": cat.created_at.isoformat()
+    }
+
+def _brand_dict(brand: Brand):
+    return {
+        "id": brand.id,
+        "name": brand.name,
+        "slug": brand.slug,
+        "logo_url": brand.logo_url,
+        "created_at": brand.created_at.isoformat()
+    }
 
 
 def _media_dict(media: ProductMedia):
     return {"id": media.id, "kind": media.kind, "url": media.url, "created_at": media.created_at.isoformat()}
-
 
 def _product_dict(prod: Product):
     return {
         "id": prod.id,
         "name": prod.name,
         "price": float(prod.price),
+        "original_price": float(prod.original_price) if prod.original_price else None,
         "instock": prod.instock,
+        "rating": float(prod.rating),
+        "reviews": prod.reviews,
+        "badge": prod.badge,
+        "description": prod.description,
+        "features": prod.features,
+        "specifications": prod.specifications,
         "created_at": prod.created_at.isoformat(),
         "marka": prod.marka,
         "category_id": prod.category_id,
@@ -94,3 +116,9 @@ def product_detail(request, product_id: int):
     if not deleted:
         return Response({"error": "not found"}, status=status.HTTP_404_NOT_FOUND)
     return Response({"deleted": True})
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def brands(request):
+    return Response([_brand_dict(b) for b in Brand.objects.all()])
