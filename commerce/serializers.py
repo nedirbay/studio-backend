@@ -60,3 +60,14 @@ class ProductSerializer(serializers.Serializer):
             for item in media or []:
                 ProductMedia.objects.create(product=instance, **item)
         return instance
+
+from .models import ContactMessage
+
+class ContactMessageSerializer(serializers.ModelSerializer):
+    username = serializers.CharField(source='user.username', read_only=True)
+    product_name = serializers.CharField(source='product.name', read_only=True)
+    
+    class Meta:
+        model = ContactMessage
+        fields = ['id', 'user', 'username', 'product', 'product_name', 'subject', 'message', 'reply', 'is_read', 'created_at']
+        read_only_fields = ['id', 'user', 'is_read', 'created_at']

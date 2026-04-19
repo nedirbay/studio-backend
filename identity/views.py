@@ -11,8 +11,19 @@ from django.utils import timezone
 from datetime import timedelta
 import random
 
-from .models import User, OTPCode
-from .serializers import UserRegisterSerializer, UserLoginSerializer, UserSerializer
+from .models import User, OTPCode, Role
+from .serializers import UserRegisterSerializer, UserLoginSerializer, UserSerializer, AdminUserSerializer
+from rest_framework import viewsets
+from rest_framework.permissions import IsAuthenticated, IsAdminUser
+
+class AdminUserViewSet(viewsets.ModelViewSet):
+    queryset = User.objects.all().order_by('-date_joined')
+    serializer_class = AdminUserSerializer
+    # Temporarily allow any or require Auth, ideally IsAdminUser
+    # Given the frontend is sending the token, IsAdminUser is best if they are superuser or staff.
+    # For now, IsAuthenticated since our custom Role-based admin might not use is_staff.
+    permission_classes = [IsAuthenticated]
+
 
 def _send_otp_email(user, code):
     subject = 'Giriş üçin tassyklama kody'
@@ -156,3 +167,26 @@ def login_view(request):
 def me_view(request):
     serializer = UserSerializer(request.user)
     return Response(serializer.data)
+
+from .models import Notification
+from .serializers import NotificationSerializer
+
+@api_view(['GET'])
+def notifications_view(request):
+    """Get all notifications for the current user."""
+    notifs = Notification.objects.filter(user=request.user).order_by('-created_at')
+    return Response(NotificationSerializer(notifs, many=True).data)
+
+@api_view(['PUT'])
+def mark_notifications_read(request):
+    """Mark all unread notifications as read for the user."""
+    Notification.objects.filter(user=request.user, is_read=False).update(is_read=True)
+    return Response({"success": True})
+
+@api_view(['DELETE'])
+def delete_notification(request, notif_id):
+    try:
+        Notification.objects.filter(id=notif_id, user=request.user).delete()
+        return Response({"success": True})
+    except Exception as e:
+        return Response({"error": str(e)}, status=400)

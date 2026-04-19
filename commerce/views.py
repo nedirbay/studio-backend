@@ -7,8 +7,25 @@ from commerce.models import Category, Product, ProductMedia, Brand, Review
 from commerce.serializers import CategorySerializer, ProductSerializer
 from commerce.services import CategoryService, ProductService
 
+from rest_framework.parsers import MultiPartParser, FormParser
+from django.core.files.storage import FileSystemStorage
+from django.conf import settings
+
 category_service = CategoryService()
 product_service = ProductService()
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def upload_image(request):
+    if 'file' not in request.FILES:
+        return Response({'error': 'No file uploaded'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    file = request.FILES['file']
+    fs = FileSystemStorage()
+    filename = fs.save(f"products/{file.name}", file)
+    file_url = f"{settings.MEDIA_URL}{filename}"
+    
+    return Response({'url': file_url}, status=status.HTTP_201_CREATED)
 
 
 def _category_dict(cat: Category):
@@ -164,3 +181,82 @@ def product_reviews(request, product_id: int):
     )
     
     return Response(_review_dict(review), status=status.HTTP_201_CREATED)
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def all_reviews(request):
+    reviews = Review.objects.all().select_related('user', 'product').order_by('-created_at')
+    # Add product details for admin view
+    result = []
+    for r in reviews:
+        d = _review_dict(r)
+        d['productName'] = r.product.name if r.product else 'Näbelli haryt'
+        d['productId'] = r.product_id
+        result.append(d)
+    return Response(result)
+
+@api_view(["DELETE"])
+@permission_classes([AllowAny])
+def review_detail(request, review_id: int):
+    try:
+        review = Review.objects.get(id=review_id)
+        review.delete()
+        return Response({"deleted": True})
+    except Review.DoesNotExist:
+        return Response({"error": "not found"}, status=status.HTTP_404_NOT_FOUND)
+
+from .models import ContactMessage
+from .serializers import ContactMessageSerializer
+
+@api_view(["GET", "POST"])
+@permission_classes([AllowAny])
+def contact_messages(request):
+    if request.method == "GET":
+        qs = ContactMessage.objects.all().select_related('user', 'product').order_by('-created_at')
+        serializer = ContactMessageSerializer(qs, many=True)
+        return Response(serializer.data)
+        
+    # POST
+    serializer = ContactMessageSerializer(data=request.data)
+    if serializer.is_valid():
+        user = request.user if request.user.is_authenticated else None
+        serializer.save(user=user)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(["PUT", "DELETE"])
+@permission_classes([AllowAny])
+def contact_message_detail(request, message_id: int):
+    try:
+        msg = ContactMessage.objects.get(id=message_id)
+    except ContactMessage.DoesNotExist:
+        return Response({"error": "not found"}, status=status.HTTP_404_NOT_FOUND)
+        
+    if request.method == "DELETE":
+        msg.delete()
+        return Response({"deleted": True})
+        
+    # PUT to mark as read or reply
+    updated = False
+    if "is_read" in request.data:
+        msg.is_read = request.data["is_read"]
+        updated = True
+        
+    if "reply" in request.data:
+        msg.reply = request.data["reply"]
+        msg.is_read = True
+        updated = True
+        # Create notification for user
+        if msg.user:
+            from identity.models import Notification
+            Notification.objects.create(
+                user=msg.user,
+                title=f"Jogap geldi: {msg.subject[:30]}...",
+                message=msg.reply,
+                type="reply"
+            )
+            
+    if updated:
+        msg.save()
+        
+    return Response(ContactMessageSerializer(msg).data)
