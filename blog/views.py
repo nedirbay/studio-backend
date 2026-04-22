@@ -23,7 +23,9 @@ def _blog_dict(post: BlogPost):
     return {
         "id": post.id,
         "title": post.title,
+        "slug": post.slug,
         "main_image": post.main_image,
+        "content": post.content,
         "date": post.date.isoformat(),
         "created_at": post.created_at.isoformat(),
         "media": [_media_dict(m) for m in post.media.all()],
@@ -34,13 +36,21 @@ def _blog_dict(post: BlogPost):
 @permission_classes([AllowAny])
 def blogs(request):
     if request.method == "GET":
-        items = [_blog_dict(p) for p in blog_service.get_all()]
-        return Response(items)
+        page = int(request.query_params.get("page", 1))
+        page_size = int(request.query_params.get("page_size", 3))
+        posts, total = blog_service.get_paginated(page, page_size)
+        items = [_blog_dict(p) for p in posts]
+        return Response({
+            "count": total,
+            "results": items,
+            "page": page,
+            "page_size": page_size
+        })
     serializer = BlogPostSerializer(data=request.data)
     if not serializer.is_valid():
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     validated = serializer.validated_data
-    post_data = {k: validated[k] for k in ("title", "main_image", "date") if k in validated}
+    post_data = {k: validated[k] for k in ("title", "main_image", "content", "date") if k in validated}
     media_data = validated.get("media", [])
     post_id = blog_service.create(post_data, media_data)
     return Response({"id": post_id}, status=status.HTTP_201_CREATED)
@@ -48,9 +58,9 @@ def blogs(request):
 
 @api_view(["GET", "PUT", "DELETE"])
 @permission_classes([AllowAny])
-def blog_detail(request, blog_id: int):
+def blog_detail(request, slug: str):
     if request.method == "GET":
-        post = blog_service.get_by_id(blog_id)
+        post = blog_service.get_by_slug(slug)
         if not post:
             return Response({"error": "not found"}, status=status.HTTP_404_NOT_FOUND)
         return Response(_blog_dict(post))
@@ -59,7 +69,7 @@ def blog_detail(request, blog_id: int):
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         validated = serializer.validated_data
-        post_data = {k: validated[k] for k in ("title", "main_image", "date") if k in validated}
+        post_data = {k: validated[k] for k in ("title", "main_image", "content", "date") if k in validated}
         media_data = validated.get("media") if "media" in validated else None
         updated = blog_service.update(blog_id, post_data, media_data)
         if not updated:

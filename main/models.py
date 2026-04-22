@@ -122,6 +122,7 @@ class Banner(models.Model):
     image_url = models.CharField(max_length=255)
     cta_text = models.CharField(max_length=50, default="Söwda et")
     bg_color = models.CharField(max_length=100, default="from-red-900/80")
+    product = models.ForeignKey('commerce.Product', on_delete=models.SET_NULL, null=True, blank=True, related_name='banners')
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self) -> str:

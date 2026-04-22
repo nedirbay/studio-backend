@@ -88,6 +88,34 @@ def populate():
             'images': ['https://images.pexels.com/photos/1714208/pexels-photo-1714208.jpeg?auto=compress&cs=tinysrgb&w=800'],
             'features': ['27" 4K UHD Durulygy', 'IPS Paneli'],
             'specifications': {'Durulygy': '3840 x 2160', 'Panel': 'IPS'}
+        },
+        {
+            'name': 'LG UltraWide 34" Egri Monitor',
+            'price': 699,
+            'category': 'Monitorlar',
+            'badge': 'hot',
+            'rating': 4.7,
+            'reviews': 263,
+            'brand': 'Samsung',
+            'inStock': False,
+            'description': 'LG UltraWide 34" egri monitory bilen iş ýeriňizi giňeldiň.',
+            'images': ['https://images.pexels.com/photos/1714208/pexels-photo-1714208.jpeg?auto=compress&cs=tinysrgb&w=800'],
+            'features': ['34" Egri UltraWide'],
+            'specifications': {'Durulygy': '3440x1440', 'Panel': 'IPS'}
+        },
+        {
+            'name': 'HP Pavilion Desktop i5 8GB RAM',
+            'price': 649,
+            'category': 'Desktop PK',
+            'badge': 'new',
+            'rating': 4.4,
+            'reviews': 45,
+            'brand': 'HP',
+            'inStock': True,
+            'description': 'Gündelik işler üçin gowy desktop kompýuteri.',
+            'images': ['https://images.pexels.com/photos/2582937/pexels-photo-2582937.jpeg?auto=compress&cs=tinysrgb&w=800'],
+            'features': ['Intel Core i5 Prosessory', '8GB RAM'],
+            'specifications': {'Prosessor': 'Intel i5'}
         }
     ]
 

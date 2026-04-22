@@ -10,7 +10,9 @@ class BlogMediaSerializer(serializers.Serializer):
 
 class BlogPostSerializer(serializers.Serializer):
     title = serializers.CharField(max_length=200)
+    slug = serializers.SlugField(required=False, read_only=True)
     main_image = serializers.CharField(max_length=255)
+    content = serializers.CharField(required=False, allow_blank=True)
     date = serializers.DateField(required=False, allow_null=True)
     media = BlogMediaSerializer(many=True, required=False, allow_null=True)
 

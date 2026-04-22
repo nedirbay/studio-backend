@@ -8,6 +8,16 @@ class BlogService:
     def get_all(self):
         return list(BlogPost.objects.all().order_by('-date', '-created_at').prefetch_related('media'))
 
+    def get_paginated(self, page: int, page_size: int):
+        queryset = BlogPost.objects.all().order_by('-date', '-created_at').prefetch_related('media')
+        total = queryset.count()
+        start = (page - 1) * page_size
+        end = start + page_size
+        return list(queryset[start:end]), total
+
+    def get_by_slug(self, slug: str) -> Optional[BlogPost]:
+        return BlogPost.objects.filter(slug=slug).prefetch_related('media').first()
+
     def get_by_id(self, blog_id: int) -> Optional[BlogPost]:
         return BlogPost.objects.filter(id=blog_id).prefetch_related('media').first()
 

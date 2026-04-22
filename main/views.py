@@ -97,6 +97,7 @@ def _banner_dict(banner: Banner):
         "image": banner.image_url,
         "ctaText": banner.cta_text,
         "bgColor": banner.bg_color,
+        "product_id": banner.product_id,
     }
 
 
@@ -336,10 +337,53 @@ def financial_stats(request):
     )
 
 
-@api_view(["GET"])
+@api_view(["GET", "POST", "PUT", "DELETE"])
 @permission_classes([AllowAny])
 def banners(request):
-    return Response([_banner_dict(b) for b in Banner.objects.all()])
+    if request.method == "GET":
+        return Response([_banner_dict(b) for b in Banner.objects.all()])
+    
+    # Simple CRUD logic for admin
+    if request.method == "POST":
+        data = request.data
+        banner = Banner.objects.create(
+            title=data.get("title", ""),
+            subtitle=data.get("subtitle"),
+            description=data.get("description"),
+            image_url=data.get("image", ""),
+            cta_text=data.get("ctaText", "Söwda et"),
+            bg_color=data.get("bgColor", "from-red-900/80"),
+            product_id=data.get("product_id")
+        )
+        return Response(_banner_dict(banner), status=status.HTTP_201_CREATED)
+    
+    if request.method == "PUT":
+        data = request.data
+        banner_id = data.get("id")
+        if not banner_id:
+            return Response({"error": "ID required"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        banner = Banner.objects.filter(id=banner_id).first()
+        if not banner:
+            return Response({"error": "not found"}, status=status.HTTP_404_NOT_FOUND)
+        
+        banner.title = data.get("title", banner.title)
+        banner.subtitle = data.get("subtitle", banner.subtitle)
+        banner.description = data.get("description", banner.description)
+        banner.image_url = data.get("image", banner.image_url)
+        banner.cta_text = data.get("ctaText", banner.cta_text)
+        banner.bg_color = data.get("bgColor", banner.bg_color)
+        banner.product_id = data.get("product_id", banner.product_id)
+        banner.save()
+        return Response(_banner_dict(banner))
+
+    if request.method == "DELETE":
+        banner_id = request.data.get("id") or request.GET.get("id")
+        if not banner_id:
+            return Response({"error": "ID required"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        Banner.objects.filter(id=banner_id).delete()
+        return Response({"deleted": True})
 
 
 @api_view(["GET"])
