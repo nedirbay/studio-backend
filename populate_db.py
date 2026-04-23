@@ -2,9 +2,10 @@ import os
 import django
 import decimal
 
-# Setup Django
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'studio_api.settings')
-django.setup()
+if __name__ == '__main__':
+    # Setup Django
+    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'studio_api.settings')
+    django.setup()
 
 from commerce.models import Category, Product, ProductMedia, Brand
 from main.models import Banner, Promo

@@ -11,6 +11,7 @@ class Role(models.Model):
         return self.name
 
 class User(AbstractUser):
+    email = models.EmailField(unique=True)
     phone = models.CharField(max_length=20, blank=True, null=True)
     salary = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     avatar_path = models.CharField(max_length=255, blank=True, null=True)

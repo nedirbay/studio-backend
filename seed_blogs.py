@@ -2,14 +2,11 @@ import os
 import django
 import sys
 
-# Add the project directory to the sys.path
-sys.path.append('/home/ubuntu/Desktop/Projects/mobile/backend')
-
-# Set the settings module
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'studio_api.settings')
-
-# Initialize Django
-django.setup()
+if __name__ == '__main__':
+    # Set the settings module
+    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'studio_api.settings')
+    # Initialize Django
+    django.setup()
 
 from blog.models import BlogPost, BlogMedia
 from django.utils import timezone

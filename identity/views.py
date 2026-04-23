@@ -282,3 +282,56 @@ def delete_notification(request, notif_id):
         return Response({"success": True})
     except Exception as e:
         return Response({"error": str(e)}, status=400)
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def forgot_password_view(request):
+    email = request.data.get("email")
+    if not email:
+        return Response({"error": "E-poçta gerek"}, status=status.HTTP_400_BAD_REQUEST)
+
+    user = User.objects.filter(email=email).first()
+    if not user:
+        # For security, we don't reveal if user exists or not, but the user requested specific behavior
+        return Response({"error": "Ulanyjy tapylmady"}, status=status.HTTP_404_NOT_FOUND)
+
+    # Generate and save OTP
+    code = f"{random.randint(100000, 999999)}"
+    expires = timezone.now() + timedelta(minutes=10)
+    OTPCode.objects.create(user=user, code=code, expires_at=expires)
+    
+    # Reuse the same email sender
+    subject = 'Paroly üýtgetmek üçin tassyklama kody'
+    message = f'Salam {user.username},\n\nParolyňyzy üýtgetmek üçin tassyklama kodyňyz: {code}\n\nBu kod 10 minut dowamynda güýjini saklaýar.'
+    try:
+        send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [user.email], fail_silently=False)
+        return Response({"message": "Tassyklama kody e-poçtaňyza ugradyldy"})
+    except Exception as e:
+        print(f"Forgot password email failed: {e}")
+        return Response({"error": "E-poçta ugratmak başartmady"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def reset_password_view(request):
+    email = request.data.get("email")
+    code = request.data.get("code")
+    new_password = request.data.get("new_password")
+
+    if not all([email, code, new_password]):
+        return Response({"error": "E-poçta, kod we täze parol gerek"}, status=status.HTTP_400_BAD_REQUEST)
+
+    user = User.objects.filter(email=email).first()
+    if not user:
+        return Response({"error": "Ulanyjy tapylmady"}, status=status.HTTP_404_NOT_FOUND)
+
+    otp_record = OTPCode.objects.filter(user=user, code=code).order_by('-created_at').first()
+    if not otp_record or not otp_record.is_valid():
+        return Response({"error": "Kod nädogry ýa-da möwriti öten"}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Success - Reset Password
+    user.set_password(new_password)
+    user.save()
+    
+    otp_record.delete() # Cleanup
+
+    return Response({"message": "Parol üstünlikli çalşyldy! Indi täze parolyňyz bilen girip bilersiňiz."})
