@@ -32,6 +32,8 @@ Backend for customers, appointments, orders, equipment, expenses, gallery, blog,
 - Legacy tokens stored on `User.token` are used only for the login step.
 - Login: `POST /api/auth/login` with JSON `{ "token": "<legacy_token>" }`
   - Returns: `jwt` (access, 30 minutes), `refresh` (7 days), plus user info.
+- Google Sign-In: `POST /api/auth/google` with JSON `{ "credential": "<google_id_token>" }`
+  - Requires env: `GOOGLE_CLIENT_ID`
 - Use the access token in requests:
   - Header: `Authorization: Bearer <jwt>`
 - Refresh: `POST /api/auth/refresh` with `{ "refresh": "<refresh_token>" }`

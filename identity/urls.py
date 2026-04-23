@@ -11,6 +11,7 @@ urlpatterns = [
     path('auth/verify-otp', views.verify_otp_view, name='verify_otp'),
     path('auth/resend-otp', views.resend_otp_view, name='resend_otp'),
     path('auth/login', views.login_view, name='login'),
+    path('auth/google', views.google_login_view, name='google_login'),
     path('auth/me', views.me_view, name='me'),
     path('notifications', views.notifications_view, name='notifications'),
     path('notifications/read', views.mark_notifications_read, name='notifications_read'),

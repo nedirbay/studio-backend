@@ -10,6 +10,9 @@ from django.conf import settings
 from django.utils import timezone
 from datetime import timedelta
 import random
+import json
+import urllib.parse
+import urllib.request
 
 from .models import User, OTPCode, Role
 from .serializers import UserRegisterSerializer, UserLoginSerializer, UserSerializer, AdminUserSerializer
@@ -162,6 +165,95 @@ def login_view(request):
             })
         return Response({'error': 'Ulanyjy ady ýa-da parol nädogry'}, status=status.HTTP_401_UNAUTHORIZED)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+def _verify_google_id_token(id_token: str) -> dict | None:
+    """
+    Verify Google ID token using Google's tokeninfo endpoint.
+    Returns token payload dict on success, otherwise None.
+    """
+    try:
+        url = 'https://oauth2.googleapis.com/tokeninfo?id_token=' + urllib.parse.quote(id_token)
+        with urllib.request.urlopen(url, timeout=10) as resp:
+            raw = resp.read().decode('utf-8')
+        payload = json.loads(raw)
+        return payload
+    except Exception:
+        return None
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def google_login_view(request):
+    credential = (request.data.get('credential') or request.data.get('id_token') or '').strip()
+    if not credential:
+        return Response({'error': 'Google token gerek'}, status=status.HTTP_400_BAD_REQUEST)
+
+    google_client_id = getattr(settings, 'GOOGLE_CLIENT_ID', None) or ''
+    if not google_client_id:
+        return Response({'error': 'Serverde GOOGLE_CLIENT_ID sazlanmady'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    payload = _verify_google_id_token(credential)
+    if not payload:
+        return Response({'error': 'Google token barlanylmady'}, status=status.HTTP_401_UNAUTHORIZED)
+
+    if payload.get('aud') != google_client_id:
+        return Response({'error': 'Google token nädogry (aud)'}, status=status.HTTP_401_UNAUTHORIZED)
+
+    email = (payload.get('email') or '').strip()
+    email_verified = payload.get('email_verified')
+    if not email:
+        return Response({'error': 'Google profilde email ýok'}, status=status.HTTP_400_BAD_REQUEST)
+    if email_verified not in (True, 'true', 'True', '1'):
+        return Response({'error': 'Google email tassyklanmady'}, status=status.HTTP_403_FORBIDDEN)
+
+    user = User.objects.filter(email__iexact=email).first()
+    created = False
+
+    if not user:
+        base_username = email.split('@')[0]
+        username = base_username
+        suffix = 1
+        while User.objects.filter(username=username).exists():
+            suffix += 1
+            username = f'{base_username}{suffix}'
+
+        user = User.objects.create_user(username=username, email=email)
+        user.set_unusable_password()
+        created = True
+
+    # Sync basic profile flags/info
+    changed_fields = set()
+    if not user.is_active:
+        user.is_active = True
+        changed_fields.add('is_active')
+    if not getattr(user, 'is_email_verified', False):
+        user.is_email_verified = True
+        changed_fields.add('is_email_verified')
+
+    given_name = (payload.get('given_name') or '').strip()
+    family_name = (payload.get('family_name') or '').strip()
+    if created:
+        if given_name:
+            user.first_name = given_name
+            changed_fields.add('first_name')
+        if family_name:
+            user.last_name = family_name
+            changed_fields.add('last_name')
+
+        customer_role = Role.objects.filter(name='Customer').first()
+        if customer_role and not user.role_id:
+            user.role = customer_role
+            changed_fields.add('role')
+
+    if changed_fields:
+        user.save(update_fields=list(changed_fields))
+
+    refresh = RefreshToken.for_user(user)
+    return Response({
+        'user': UserSerializer(user).data,
+        'jwt': str(refresh.access_token),
+        'refresh': str(refresh)
+    })
 
 @api_view(['GET'])
 def me_view(request):
