@@ -6,7 +6,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
-from .models import Appointment, Customer, Equipment, Expense, Order, OrderDay, OrderStaff, Banner, Promo
+from .models import Appointment, Customer, Equipment, Expense, Order, OrderDay, OrderStaff, Banner, Promo, OrderType
 from .services import AppointmentService, CustomerService, EquipmentService, ExpenseService, OrderService
 
 customer_service = CustomerService()
@@ -54,7 +54,7 @@ def _order_staff_dict(staff: OrderStaff):
     return {
         "id": staff.id,
         "user_id": staff.user_id,
-        "user_name": staff.user.name,
+        "user_name": staff.user.username,
         "role": staff.role,
     }
 
@@ -294,7 +294,7 @@ def equipments_assigned(request):
             "equipment_id": assign.equipment_id,
             "equipment_name": assign.equipment.name,
             "user_id": assign.user_id,
-            "user_name": assign.user.name,
+            "user_name": assign.user.username,
             "count": assign.count,
             "assigned_at": assign.assigned_at.isoformat(),
         }
@@ -319,6 +319,17 @@ def expenses(request):
         }
     )
     return Response({"id": expense_id}, status=status.HTTP_201_CREATED)
+    
+@api_view(["GET", "POST"])
+def order_types(request):
+    if request.method == "GET":
+        items = [{"id": ot.id, "name": ot.name} for ot in OrderType.objects.all()]
+        return Response(items)
+    data = request.data
+    if "name" not in data:
+        return Response({"error": "name required"}, status=status.HTTP_400_BAD_REQUEST)
+    ot = OrderType.objects.create(name=data["name"])
+    return Response({"id": ot.id}, status=status.HTTP_201_CREATED)
 
 
 @api_view(["GET"])

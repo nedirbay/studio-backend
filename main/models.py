@@ -53,12 +53,18 @@ class Equipment(models.Model):
         return self.name
 
 
+class OrderType(models.Model):
+    name = models.CharField(max_length=150)
+
+    def __str__(self) -> str:
+        return self.name
+
 class Order(models.Model):
     customer_name = models.CharField(max_length=150)
     customer_phone = models.CharField(max_length=50)
     total_amount = models.DecimalField(max_digits=12, decimal_places=2)
     paid_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
-    order_type_id = models.IntegerField(null=True, blank=True)
+    order_type = models.ForeignKey(OrderType, on_delete=models.SET_NULL, null=True, blank=True, related_name="orders")
     created_at = models.DateTimeField(default=timezone.now)
 
     def __str__(self) -> str:

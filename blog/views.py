@@ -58,9 +58,9 @@ def blogs(request):
 
 @api_view(["GET", "PUT", "DELETE"])
 @permission_classes([AllowAny])
-def blog_detail(request, slug: str):
+def blog_detail(request, blog_id: int):
     if request.method == "GET":
-        post = blog_service.get_by_slug(slug)
+        post = blog_service.get_by_id(blog_id)
         if not post:
             return Response({"error": "not found"}, status=status.HTTP_404_NOT_FOUND)
         return Response(_blog_dict(post))

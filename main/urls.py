@@ -16,6 +16,7 @@ urlpatterns = [
     path("equipments", views.equipments),
     path("equipments/assigned", views.equipments_assigned),
     path("expenses", views.expenses),
+    path("order-types", views.order_types),
     path("stats/financial", views.financial_stats),
     path("banners", views.banners),
     path("promos", views.promos),

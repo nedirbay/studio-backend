@@ -15,8 +15,10 @@ from .models import (
     Expense,
     Order,
     OrderDay,
+    OrderType,
 )
 from .services import OrderService
+from rest_framework_simplejwt.tokens import RefreshToken
 
 
 class ApiEndpointsTests(TestCase):
@@ -24,9 +26,10 @@ class ApiEndpointsTests(TestCase):
         self.client = Client()
         # seed role/user
         self.role = Role.objects.create(name="admin")
-        self.user = User.objects.create(
-            name="Tester",
-            token="tok123",
+        self.user = User.objects.create_user(
+            username="tester",
+            email="tester@example.com",
+            password="password123",
             role=self.role,
             salary=Decimal("1000.00"),
             phone="555-000",
@@ -40,9 +43,11 @@ class ApiEndpointsTests(TestCase):
             time="10:00",
             service_type="shoot",
         )
+        self.ot = OrderType.objects.create(name="Studio")
 
     def _issue_jwt(self, user):
-        return issue_jwt(user)
+        refresh = RefreshToken.for_user(user)
+        return str(refresh.access_token)
 
     def auth_headers(self):
         return {"HTTP_AUTHORIZATION": f"Bearer {self.jwt}"}
@@ -131,7 +136,7 @@ class ApiEndpointsTests(TestCase):
             "customer_phone": "111",
             "total_amount": 100,
             "paid_amount": 50,
-            "order_type_id": 1,
+            "order_type_id": self.ot.id,
             "days": [
                 {"date": "2025-01-02", "address": "Addr", "daily_price": 100, "time": "09:00"}
             ],
@@ -250,13 +255,26 @@ class ApiEndpointsTests(TestCase):
         items = resp.json()
         self.assertTrue(any(item["equipment_id"] == eq_id for item in items))
 
+    def test_order_types(self):
+        resp = self.client.get("/api/order-types", **self.auth_headers())
+        self.assertEqual(resp.status_code, 200)
+        
+        resp = self.client.post(
+            "/api/order-types",
+            data=json.dumps({"name": "Wedding"}),
+            content_type="application/json",
+            **self.auth_headers()
+        )
+        self.assertEqual(resp.status_code, 201)
+        self.assertTrue(OrderType.objects.filter(name="Wedding").exists())
+
 
 class ServiceLayerTests(TestCase):
     def setUp(self):
         self.role = Role.objects.create(name="admin")
-        self.user = User.objects.create(
-            name="Tester",
-            token="tok123",
+        self.user = User.objects.create_user(
+            username="tester2",
+            password="password123",
             role=self.role,
             salary=Decimal("500.00"),
         )

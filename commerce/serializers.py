@@ -70,4 +70,35 @@ class ContactMessageSerializer(serializers.ModelSerializer):
     class Meta:
         model = ContactMessage
         fields = ['id', 'user', 'username', 'product', 'product_name', 'subject', 'message', 'reply', 'is_read', 'created_at']
-        read_only_fields = ['id', 'user', 'is_read', 'created_at']
+from .models import Order, OrderItem
+
+class OrderItemSerializer(serializers.ModelSerializer):
+    product_name = serializers.CharField(source='product.name', read_only=True)
+
+    class Meta:
+        model = OrderItem
+        fields = ['id', 'product', 'product_name', 'quantity', 'price']
+        read_only_fields = ['price']
+
+class OrderSerializer(serializers.ModelSerializer):
+    items = OrderItemSerializer(many=True, required=False)
+
+    class Meta:
+        model = Order
+        fields = ['id', 'user', 'full_name', 'phone_number', 'total_price', 'status', 'items', 'created_at']
+        read_only_fields = ['id', 'user', 'created_at']
+
+    def create(self, validated_data):
+        items_data = validated_data.pop('items', [])
+        order = Order.objects.create(**validated_data)
+        total_price = 0
+        for item_data in items_data:
+            product = item_data['product']
+            quantity = item_data['quantity']
+            price = product.price # Take current price
+            OrderItem.objects.create(order=order, product=product, quantity=quantity, price=price)
+            total_price += price * quantity
+        
+        order.total_price = total_price
+        order.save()
+        return order

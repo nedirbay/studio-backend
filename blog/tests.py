@@ -15,9 +15,9 @@ class BlogEndpointsTests(TestCase):
     def test_list(self):
         resp = self.client.get("/api/blogs")
         self.assertEqual(resp.status_code, 200)
-        items = resp.json()
-        self.assertGreaterEqual(len(items), 1)
-        self.assertIn("media", items[0])
+        data = resp.json()
+        self.assertGreaterEqual(data["count"], 1)
+        self.assertIn("media", data["results"][0])
 
     def test_create_with_media(self):
         payload = {

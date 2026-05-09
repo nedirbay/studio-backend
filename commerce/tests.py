@@ -20,11 +20,11 @@ class CommerceEndpointsTests(TestCase):
         ProductMedia.objects.create(product=self.product, kind="image", url="/img/cam.jpg")
 
     def test_categories_list_create(self):
-        resp = self.client.get("/api/categories")
+        resp = self.client.get("/api/commerce/categories")
         self.assertEqual(resp.status_code, 200)
         self.assertGreaterEqual(len(resp.json()), 1)
 
-        resp = self.client.post("/api/categories", data=json.dumps({"name": "Lenses"}), content_type="application/json")
+        resp = self.client.post("/api/commerce/categories", data=json.dumps({"name": "Lenses"}), content_type="application/json")
         self.assertEqual(resp.status_code, 201)
         self.assertTrue(Category.objects.filter(name="Lenses").exists())
 
@@ -40,25 +40,38 @@ class CommerceEndpointsTests(TestCase):
                 {"kind": "video", "url": "https://vid.com/1"},
             ],
         }
-        resp = self.client.post("/api/products", data=json.dumps(payload), content_type="application/json")
+        resp = self.client.post("/api/commerce/products", data=json.dumps(payload), content_type="application/json")
         self.assertEqual(resp.status_code, 201)
         new_id = resp.json()["id"]
         prod = Product.objects.get(id=new_id)
         self.assertEqual(prod.media.count(), 2)
 
     def test_product_detail_update_delete(self):
-        resp = self.client.get(f"/api/products/{self.product.id}")
+        resp = self.client.get(f"/api/commerce/products/{self.product.id}")
         self.assertEqual(resp.status_code, 200)
         # update instock and replace media with one video
         payload = {"instock": False, "media": [{"kind": "video", "url": "vid.mp4"}]}
         resp = self.client.put(
-            f"/api/products/{self.product.id}", data=json.dumps(payload), content_type="application/json"
+            f"/api/commerce/products/{self.product.id}", data=json.dumps(payload), content_type="application/json"
         )
         self.assertEqual(resp.status_code, 200)
         self.product.refresh_from_db()
         self.assertFalse(self.product.instock)
         self.assertEqual(self.product.media.count(), 1)
         # delete
-        resp = self.client.delete(f"/api/products/{self.product.id}")
+        resp = self.client.delete(f"/api/commerce/products/{self.product.id}")
         self.assertEqual(resp.status_code, 200)
         self.assertFalse(Product.objects.filter(id=self.product.id).exists())
+
+    def test_order_creation(self):
+        payload = {
+            "full_name": "Merdan",
+            "phone_number": "123456",
+            "items": [
+                {"product": self.product.id, "quantity": 2}
+            ]
+        }
+        resp = self.client.post("/api/commerce/orders", data=json.dumps(payload), content_type="application/json")
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(resp.json()["full_name"], "Merdan")
+        self.assertEqual(float(resp.json()["total_price"]), 200.0)

@@ -15,4 +15,6 @@ urlpatterns += [
     path("reviews/<int:review_id>", views.review_detail),
     path("messages", views.contact_messages),
     path("messages/<int:message_id>", views.contact_message_detail),
+    path("orders", views.OrderViewSet.as_view({'get': 'list', 'post': 'create'})),
+    path("orders/<int:pk>", views.OrderViewSet.as_view({'get': 'retrieve', 'put': 'update', 'delete': 'destroy'})),
 ]

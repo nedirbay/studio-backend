@@ -1,6 +1,6 @@
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from commerce.models import Category, Product, ProductMedia, Brand, Review
@@ -259,4 +259,21 @@ def contact_message_detail(request, message_id: int):
     if updated:
         msg.save()
         
-    return Response(ContactMessageSerializer(msg).data)
+from rest_framework import viewsets
+from .models import Order, OrderItem
+from .serializers import OrderSerializer, OrderItemSerializer
+
+class OrderViewSet(viewsets.ModelViewSet):
+    queryset = Order.objects.all().order_by('-created_at')
+    serializer_class = OrderSerializer
+
+    def get_permissions(self):
+        if self.action == 'create':
+            return [AllowAny()]
+        return [IsAuthenticated()]
+
+    def perform_create(self, serializer):
+        if self.request.user.is_authenticated:
+            serializer.save(user=self.request.user)
+        else:
+            serializer.save()
