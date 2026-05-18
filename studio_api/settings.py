@@ -53,6 +53,7 @@ INSTALLED_APPS = [
     'commerce',
     'photostudio',
     'main',
+    'gifts',
     'corsheaders',
 ]
 

@@ -258,7 +258,9 @@ def contact_message_detail(request, message_id: int):
             
     if updated:
         msg.save()
-        
+
+    return Response(ContactMessageSerializer(msg).data)
+
 from rest_framework import viewsets
 from .models import Order, OrderItem
 from .serializers import OrderSerializer, OrderItemSerializer

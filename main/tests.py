@@ -9,6 +9,7 @@ from identity.models import Role, User
 
 from .models import (
     Appointment,
+    Banner,
     Customer,
     Equipment,
     EquipmentAssignment,
@@ -16,6 +17,7 @@ from .models import (
     Order,
     OrderDay,
     OrderType,
+    Promo,
 )
 from .services import OrderService
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -268,6 +270,53 @@ class ApiEndpointsTests(TestCase):
         self.assertEqual(resp.status_code, 201)
         self.assertTrue(OrderType.objects.filter(name="Wedding").exists())
 
+    def test_banners_crud_and_promos_list(self):
+        banner_payload = {
+            "title": "Camera Banner",
+            "subtitle": "Fresh stock",
+            "description": "Latest cameras",
+            "image": "https://example.com/banner.jpg",
+            "ctaText": "Shop now",
+            "bgColor": "from-red-900/80",
+        }
+        create_response = self.client.post(
+            "/api/banners",
+            data=json.dumps(banner_payload),
+            content_type="application/json",
+        )
+        self.assertEqual(create_response.status_code, 201)
+        banner_id = create_response.json()["id"]
+
+        list_response = self.client.get("/api/banners")
+        self.assertEqual(list_response.status_code, 200)
+        self.assertTrue(any(item["id"] == banner_id for item in list_response.json()))
+
+        update_response = self.client.put(
+            "/api/banners",
+            data=json.dumps({"id": banner_id, "title": "Updated Camera Banner"}),
+            content_type="application/json",
+        )
+        self.assertEqual(update_response.status_code, 200)
+        self.assertEqual(Banner.objects.get(id=banner_id).title, "Updated Camera Banner")
+
+        delete_response = self.client.delete(
+            "/api/banners",
+            data=json.dumps({"id": banner_id}),
+            content_type="application/json",
+        )
+        self.assertEqual(delete_response.status_code, 200)
+        self.assertFalse(Banner.objects.filter(id=banner_id).exists())
+
+        Promo.objects.create(
+            title="Lens promo",
+            subtitle="Top deals",
+            badge="Sale",
+            image_url="https://example.com/promo.jpg",
+        )
+        promo_response = self.client.get("/api/promos")
+        self.assertEqual(promo_response.status_code, 200)
+        self.assertEqual(len(promo_response.json()), 1)
+
 
 class ServiceLayerTests(TestCase):
     def setUp(self):
@@ -292,3 +341,99 @@ class ServiceLayerTests(TestCase):
         self.assertEqual(stats.total_income, Decimal("40.00"))
         self.assertEqual(stats.total_expense, Decimal("10.00"))
         self.assertEqual(stats.net, Decimal("30.00"))
+
+    def test_order_remaining_amount_property(self):
+        self.assertEqual(self.order.remaining_amount, Decimal("60.00"))
+
+    def test_financial_stats_with_date_range(self):
+        svc = OrderService()
+        stats = svc.get_financial_stats(start=date(2025, 1, 10), end=date(2025, 1, 31))
+        # expense was on Jan 5 so it should be excluded
+        self.assertEqual(stats.total_expense, Decimal("0"))
+
+
+class EdgeCaseTests(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.role = Role.objects.create(name="staff")
+        self.user = User.objects.create_user(
+            username="edge", email="e@example.com", password="pass123", role=self.role
+        )
+        self.jwt = str(RefreshToken.for_user(self.user).access_token)
+
+    def auth(self):
+        return {"HTTP_AUTHORIZATION": f"Bearer {self.jwt}"}
+
+    def test_customer_detail_not_found(self):
+        resp = self.client.get("/api/customers/99999", **self.auth())
+        self.assertEqual(resp.status_code, 404)
+
+    def test_customer_update_not_found(self):
+        resp = self.client.put(
+            "/api/customers/99999",
+            data=json.dumps({"name": "X"}),
+            content_type="application/json",
+            **self.auth(),
+        )
+        self.assertEqual(resp.status_code, 404)
+
+    def test_customer_delete_not_found(self):
+        resp = self.client.delete("/api/customers/99999", **self.auth())
+        self.assertEqual(resp.status_code, 404)
+
+    def test_order_detail_not_found(self):
+        resp = self.client.get("/api/orders/99999", **self.auth())
+        self.assertEqual(resp.status_code, 404)
+
+    def test_appointments_invalid_date_format(self):
+        resp = self.client.get("/api/appointments/date/not-a-date", **self.auth())
+        self.assertEqual(resp.status_code, 400)
+
+    def test_equipments_missing_fields(self):
+        resp = self.client.post(
+            "/api/equipments",
+            data=json.dumps({}),
+            content_type="application/json",
+            **self.auth(),
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    def test_expense_missing_fields(self):
+        resp = self.client.post(
+            "/api/expenses",
+            data=json.dumps({"amount": 50}),
+            content_type="application/json",
+            **self.auth(),
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    def test_protected_endpoints_require_jwt(self):
+        # No auth header
+        for url in ["/api/customers", "/api/appointments", "/api/orders", "/api/equipments", "/api/expenses"]:
+            resp = self.client.get(url)
+            self.assertEqual(resp.status_code, 401, msg=url)
+
+    def test_banner_update_missing_id(self):
+        resp = self.client.put(
+            "/api/banners",
+            data=json.dumps({"title": "no-id"}),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    def test_banner_update_not_found(self):
+        resp = self.client.put(
+            "/api/banners",
+            data=json.dumps({"id": 99999, "title": "X"}),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 404)
+
+    def test_order_type_create_validation(self):
+        resp = self.client.post(
+            "/api/order-types",
+            data=json.dumps({}),
+            content_type="application/json",
+            **self.auth(),
+        )
+        self.assertEqual(resp.status_code, 400)

@@ -29,6 +29,7 @@ urlpatterns = [
     path('api/', include('main.urls')),
     path('api/commerce/', include('commerce.urls')),
     path('api/photostudio/', include('photostudio.urls')),
+    path('api/gifts/', include('gifts.urls')),
     path('', include('blog.urls')),
 ]
 
