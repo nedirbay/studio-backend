@@ -14,15 +14,7 @@ from django.db import connection
 from gifts.models import Campaign, CampaignParticipation, CampaignRule, CampaignWinner
 from identity.models import Role, User
 from main.models import Banner, Promo
-from photostudio.models import (
-    PhotoCategory,
-    PhotoCollection,
-    PhotoReel,
-    PhotoReelComment,
-    PhotoReelLike,
-    PhotoReelShare,
-    PhotoReelTag,
-)
+from photostudio.models import PhotoStudioImage, PhotoStudioVideo
 
 
 def get_or_create_user(username: str, email: str, role: Role) -> User:
@@ -51,175 +43,22 @@ def sync_pk_sequence(model) -> None:
 
 
 def seed_photostudio() -> None:
-    studio_role, _ = Role.objects.get_or_create(name="Studio")
-    author = get_or_create_user("studio", "studio@example.com", studio_role)
-    commenter = get_or_create_user("customer1", "customer1@example.com", studio_role)
-
-    wedding, _ = PhotoCategory.objects.get_or_create(name="Toý", defaults={"slug": "toy"})
-    portrait, _ = PhotoCategory.objects.get_or_create(name="Portret", defaults={"slug": "portret"})
-    wedding_videos, _ = PhotoCollection.objects.update_or_create(
-        title="Toý wideolary",
-        kind="video",
+    PhotoStudioVideo.objects.update_or_create(
+        title="Doganlar toý pursatlary",
         defaults={
-            "category": wedding,
-            "description": "Toý gününden saýlanan dinamiki wideolar we iň gowy pursatlar.",
-            "cover_url": "https://images.pexels.com/photos/31370702/pexels-photo-31370702.jpeg?auto=compress&cs=tinysrgb&w=1200",
-            "sort_order": 1,
-            "is_published": True,
-        },
-    )
-    portrait_videos, _ = PhotoCollection.objects.update_or_create(
-        title="Portret wideolary",
-        kind="video",
-        defaults={
-            "category": portrait,
-            "description": "Studiýada düşürilen portret wideolary.",
-            "cover_url": "https://images.pexels.com/photos/842811/pexels-photo-842811.jpeg?auto=compress&cs=tinysrgb&w=1200",
-            "sort_order": 2,
-            "is_published": True,
-        },
-    )
-    portrait_photos, _ = PhotoCollection.objects.update_or_create(
-        title="Portret suratlary",
-        kind="image",
-        defaults={
-            "category": portrait,
-            "description": "Ýumşak yşykly studiýa portret ýygyndysy.",
-            "cover_url": "https://images.pexels.com/photos/774909/pexels-photo-774909.jpeg?auto=compress&cs=tinysrgb&w=1200",
-            "sort_order": 3,
-            "is_published": True,
-        },
-    )
-    wedding_photos, _ = PhotoCollection.objects.update_or_create(
-        title="Toý suratlary",
-        kind="image",
-        defaults={
-            "category": wedding,
-            "description": "Toý albomyndan saýlanan iň gowy suratlar.",
-            "cover_url": "https://images.pexels.com/photos/1024960/pexels-photo-1024960.jpeg?auto=compress&cs=tinysrgb&w=1200",
-            "sort_order": 4,
-            "is_published": True,
-        },
-    )
-
-    reel_1, _ = PhotoReel.objects.update_or_create(
-        media_url="https://images.pexels.com/photos/31370702/pexels-photo-31370702.jpeg?auto=compress&cs=tinysrgb&w=1200",
-        defaults={
-            "category": wedding,
-            "collection": wedding_videos,
-            "author": author,
-            "title": "Doganlar toý pursatlary",
             "description": "Toý gününden gysgaça wideo we iň täsirli pursatlar.",
-            "kind": "video",
-            "thumbnail_url": "https://images.pexels.com/photos/31370702/pexels-photo-31370702.jpeg?auto=compress&cs=tinysrgb&w=800",
-            "duration": 23,
-            "music_title": "Wedding Highlights",
-            "is_published": True,
+            "thumbnail_image": "photostudio/videos/thumbnails/wedding-highlights.jpg",
+            "video": "photostudio/videos/wedding-highlights.mp4",
+            "hls_status": "pending",
         },
     )
-    reel_2, _ = PhotoReel.objects.update_or_create(
-        media_url="https://videos.pexels.com/video-files/3015488/3015488-hd_1080_1920_24fps.mp4",
+    PhotoStudioImage.objects.update_or_create(
+        title="Portret sessiýasy",
         defaults={
-            "category": wedding,
-            "collection": wedding_videos,
-            "author": author,
-            "title": "Sahnadaky çykyş",
-            "description": "Toýdan joşgunly sahna pursatlary.",
-            "kind": "video",
-            "thumbnail_url": "https://images.pexels.com/photos/3014856/pexels-photo-3014856.jpeg?auto=compress&cs=tinysrgb&w=800",
-            "duration": 19,
-            "music_title": "Live Celebration",
-            "is_published": True,
-        },
-    )
-    reel_3, _ = PhotoReel.objects.update_or_create(
-        media_url="https://videos.pexels.com/video-files/6954203/6954203-hd_1080_1920_25fps.mp4",
-        defaults={
-            "category": portrait,
-            "collection": portrait_videos,
-            "author": author,
-            "title": "Portret backstage",
-            "description": "Portret sessiýasynyň kamera arkasy.",
-            "kind": "video",
-            "thumbnail_url": "https://images.pexels.com/photos/842811/pexels-photo-842811.jpeg?auto=compress&cs=tinysrgb&w=800",
-            "duration": 15,
-            "music_title": "Studio Mood",
-            "is_published": True,
-        },
-    )
-    reel_4, _ = PhotoReel.objects.update_or_create(
-        media_url="https://images.pexels.com/photos/774909/pexels-photo-774909.jpeg?auto=compress&cs=tinysrgb&w=1200",
-        defaults={
-            "category": portrait,
-            "collection": portrait_photos,
-            "author": author,
-            "title": "Portret sessiýasy",
             "description": "Ýumşak yşyk bilen studiýa portret toplumy.",
-            "kind": "image",
-            "thumbnail_url": "https://images.pexels.com/photos/774909/pexels-photo-774909.jpeg?auto=compress&cs=tinysrgb&w=800",
-            "duration": 0,
-            "music_title": "",
-            "is_published": True,
+            "thumbnail_image": "photostudio/images/thumbnails/portrait-session.jpg",
+            "image": "photostudio/images/portrait-session.jpg",
         },
-    )
-    reel_5, _ = PhotoReel.objects.update_or_create(
-        media_url="https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=1200",
-        defaults={
-            "category": portrait,
-            "collection": portrait_photos,
-            "author": author,
-            "title": "Ak fonda portret",
-            "description": "Minimal studiýa portret kadry.",
-            "kind": "image",
-            "thumbnail_url": "https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=800",
-            "duration": 0,
-            "music_title": "",
-            "is_published": True,
-        },
-    )
-    reel_6, _ = PhotoReel.objects.update_or_create(
-        media_url="https://images.pexels.com/photos/1024960/pexels-photo-1024960.jpeg?auto=compress&cs=tinysrgb&w=1200",
-        defaults={
-            "category": wedding,
-            "collection": wedding_photos,
-            "author": author,
-            "title": "Toý albomy",
-            "description": "Couple session-den romantik kadrlar.",
-            "kind": "image",
-            "thumbnail_url": "https://images.pexels.com/photos/1024960/pexels-photo-1024960.jpeg?auto=compress&cs=tinysrgb&w=800",
-            "duration": 0,
-            "music_title": "",
-            "is_published": True,
-        },
-    )
-
-    for reel, tags in (
-        (reel_1, ["toy", "wedding", "video"]),
-        (reel_2, ["stage", "celebration", "video"]),
-        (reel_3, ["portrait", "studio", "video"]),
-        (reel_4, ["portrait", "studio"]),
-        (reel_5, ["portrait", "white-bg"]),
-        (reel_6, ["wedding", "album"]),
-    ):
-        existing = set(reel.tags.values_list("name", flat=True))
-        for tag_name in tags:
-            if tag_name not in existing:
-                PhotoReelTag.objects.create(reel=reel, name=tag_name)
-
-    PhotoReelLike.objects.get_or_create(reel=reel_1, user=commenter)
-    PhotoReelShare.objects.get_or_create(reel=reel_1, user=commenter, channel="instagram")
-
-    root_comment, _ = PhotoReelComment.objects.get_or_create(
-        reel=reel_1,
-        user=commenter,
-        parent=None,
-        text="Ajaýyp taýýarlyk bolupdyr!",
-    )
-    PhotoReelComment.objects.get_or_create(
-        reel=reel_1,
-        user=author,
-        parent=root_comment,
-        text="Sag boluň, täzelerini hem goşarys.",
     )
 
 
