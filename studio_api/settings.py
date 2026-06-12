@@ -54,6 +54,7 @@ INSTALLED_APPS = [
     'photostudio',
     'main',
     'gifts',
+    'management',
     'corsheaders',
 ]
 
