@@ -96,3 +96,12 @@ class BlogEndpointsTests(TestCase):
     def test_slug_auto_generated(self):
         post = BlogPost.objects.create(title="Hello World", main_image="/x.jpg")
         self.assertEqual(post.slug, "hello-world")
+
+    def test_slug_collision_resolution(self):
+        post1 = BlogPost.objects.create(title="Collision Test", main_image="/x.jpg")
+        post2 = BlogPost.objects.create(title="Collision Test", main_image="/y.jpg")
+        post3 = BlogPost.objects.create(title="Collision Test", main_image="/z.jpg")
+
+        self.assertEqual(post1.slug, "collision-test")
+        self.assertEqual(post2.slug, "collision-test-1")
+        self.assertEqual(post3.slug, "collision-test-2")

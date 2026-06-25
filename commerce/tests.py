@@ -95,6 +95,19 @@ class CommerceEndpointsTests(TestCase):
         self.assertEqual(len(data), 1)
         self.assertEqual(data[0]["name"], "Canon")
 
+    def test_category_and_brand_slug_auto_generation_and_collision(self):
+        # Test Category slug auto generation and collision
+        cat1 = Category.objects.create(name="Smart Phones")
+        cat2 = Category.objects.create(name="Smart Phones")
+        self.assertEqual(cat1.slug, "smart-phones")
+        self.assertEqual(cat2.slug, "smart-phones-1")
+
+        # Test Brand slug auto generation and collision
+        brand1 = Brand.objects.create(name="Sony Alpha")
+        brand2 = Brand.objects.create(name="Sony Alpha")
+        self.assertEqual(brand1.slug, "sony-alpha")
+        self.assertEqual(brand2.slug, "sony-alpha-1")
+
 
 class ReviewTests(APITestCase):
     def setUp(self):

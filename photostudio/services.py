@@ -1,6 +1,7 @@
 import shutil
 import subprocess
 from pathlib import Path
+import imageio_ffmpeg
 
 from django.conf import settings
 
@@ -20,7 +21,7 @@ def generate_hls_for_video(video) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     command = [
-        "ffmpeg",
+        imageio_ffmpeg.get_ffmpeg_exe(),
         "-y",
         "-i",
         str(source_path),
