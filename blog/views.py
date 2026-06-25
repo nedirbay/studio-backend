@@ -40,8 +40,21 @@ def blogs(request):
         page_size = int(request.query_params.get("page_size", 3))
         posts, total = blog_service.get_paginated(page, page_size)
         items = [_blog_dict(p) for p in posts]
+
+        # Build next and previous absolute URLs for pagination compliance
+        request_url = request.build_absolute_uri(request.path)
+        next_url = None
+        if page * page_size < total:
+            next_url = f"{request_url}?page={page + 1}&page_size={page_size}"
+
+        prev_url = None
+        if page > 1:
+            prev_url = f"{request_url}?page={page - 1}&page_size={page_size}"
+
         return Response({
             "count": total,
+            "next": next_url,
+            "previous": prev_url,
             "results": items,
             "page": page,
             "page_size": page_size
