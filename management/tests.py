@@ -106,7 +106,7 @@ class ManagementApiTests(APITestCase):
                     "address": "Aşgabat",
                     "daily_price": 500,
                     "time": "10:00",
-                    "equipments": [{"equipment_id": equipment.id, "count": 2}],
+                    "equipments": [],
                     "services": [{"service_id": service.id, "count": 1}],
                 }
             ],
@@ -127,7 +127,7 @@ class ManagementApiTests(APITestCase):
         self.assertEqual(data["remaining_amount"], 600.0)
         self.assertEqual(data["order_type_id"], order_type.id)
         self.assertEqual(len(data["days"]), 1)
-        self.assertEqual(data["days"][0]["equipments"][0]["count"], 2)
+        self.assertEqual(len(data["days"][0]["equipments"]), 0)
         self.assertEqual(data["days"][0]["services"][0]["service_name"], "Montaž")
         self.assertEqual(len(data["staff"]), 1)
         self.assertEqual(data["staff"][0]["user_id"], self.user.id)
@@ -146,6 +146,15 @@ class ManagementApiTests(APITestCase):
         refreshed = self.client.get(f"{BASE}/orders/{oid}").data
         self.assertEqual(refreshed["remaining_amount"], 0.0)
         self.assertEqual(refreshed["days"], [])
+        
+        # default status is pending
+        self.assertEqual(refreshed["status"], "pending")
+
+        # test PATCH status to approved
+        patch_resp = self.client.patch(f"{BASE}/orders/{oid}", {"status": "approved"}, format="json")
+        self.assertEqual(patch_resp.status_code, 200)
+        self.assertEqual(patch_resp.data["status"], "approved")
+        self.assertEqual(Order.objects.get(id=oid).status, "approved")
 
         self.assertEqual(self.client.delete(f"{BASE}/orders/{oid}").status_code, 200)
         self.assertFalse(Order.objects.filter(id=oid).exists())

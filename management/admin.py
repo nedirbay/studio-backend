@@ -9,7 +9,6 @@ from .models import (
     GalleryItem,
     Order,
     OrderDay,
-    OrderDayEquipment,
     OrderDayService,
     OrderStaff,
     OrderStaffEquipment,
@@ -32,9 +31,7 @@ class AppointmentAdmin(admin.ModelAdmin):
     search_fields = ("customer__name", "service_type")
 
 
-class OrderDayEquipmentInline(admin.TabularInline):
-    model = OrderDayEquipment
-    extra = 0
+
 
 
 class OrderDayServiceInline(admin.TabularInline):
@@ -45,7 +42,7 @@ class OrderDayServiceInline(admin.TabularInline):
 @admin.register(OrderDay)
 class OrderDayAdmin(admin.ModelAdmin):
     list_display = ("id", "order", "date", "address", "daily_price")
-    inlines = [OrderDayEquipmentInline, OrderDayServiceInline]
+    inlines = [OrderDayServiceInline]
 
 
 class OrderDayInline(admin.TabularInline):

@@ -19,7 +19,7 @@ class CampaignParticipationSerializer(serializers.ModelSerializer):
             'full_name', 'phone', 'email', 'note',
             'status', 'created_at',
         ]
-        read_only_fields = ['user', 'status', 'created_at']
+        read_only_fields = ['user', 'created_at']
 
     def get_user_name(self, obj):
         if obj.user:

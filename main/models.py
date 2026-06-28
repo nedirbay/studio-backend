@@ -146,3 +146,20 @@ class Promo(models.Model):
 
     def __str__(self) -> str:
         return self.title
+
+
+class MobileAppVersion(models.Model):
+    version_name = models.CharField(max_length=50)
+    version_code = models.IntegerField()
+    file = models.FileField(upload_to="apks/")
+    is_active = models.BooleanField(default=False)
+    description = models.TextField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-version_code", "-created_at"]
+
+    def __str__(self) -> str:
+        return f"{self.version_name} ({self.version_code}) - {'Active' if self.is_active else 'Inactive'}"
+

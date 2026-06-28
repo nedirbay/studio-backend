@@ -4,7 +4,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from commerce.models import Category, Product, ProductMedia, Brand, Review
-from commerce.serializers import CategorySerializer, ProductSerializer
+from commerce.serializers import CategorySerializer, ProductSerializer, BrandSerializer
 from commerce.services import CategoryService, ProductService
 
 from rest_framework.parsers import MultiPartParser, FormParser
@@ -92,8 +92,49 @@ def categories(request):
     serializer = CategorySerializer(data=request.data)
     if not serializer.is_valid():
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    new_id = category_service.create(serializer.validated_data["name"])
-    return Response({"id": new_id}, status=status.HTTP_201_CREATED)
+    validated = serializer.validated_data
+    slug = validated.get("slug")
+    if slug and Category.objects.filter(slug=slug).exists():
+        return Response({"slug": ["This slug is already in use."]}, status=status.HTTP_400_BAD_REQUEST)
+    cat = Category.objects.create(
+        name=validated["name"],
+        slug=validated.get("slug"),
+        icon=validated.get("icon")
+    )
+    return Response(_category_dict(cat), status=status.HTTP_201_CREATED)
+
+
+@api_view(["GET", "PUT", "DELETE"])
+@permission_classes([AllowAny])
+def category_detail(request, category_id: int):
+    try:
+        cat = Category.objects.get(id=category_id)
+    except Category.DoesNotExist:
+        return Response({"error": "not found"}, status=status.HTTP_404_NOT_FOUND)
+        
+    if request.method == "GET":
+        return Response(_category_dict(cat))
+        
+    elif request.method == "PUT":
+        serializer = CategorySerializer(data=request.data, partial=True)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        validated = serializer.validated_data
+        if "name" in validated:
+            cat.name = validated["name"]
+        if "slug" in validated:
+            slug = validated["slug"]
+            if Category.objects.filter(slug=slug).exclude(id=category_id).exists():
+                return Response({"slug": ["This slug is already in use."]}, status=status.HTTP_400_BAD_REQUEST)
+            cat.slug = slug
+        if "icon" in validated:
+            cat.icon = validated["icon"]
+        cat.save()
+        return Response(_category_dict(cat))
+        
+    elif request.method == "DELETE":
+        cat.delete()
+        return Response({"deleted": True})
 
 
 @api_view(["GET", "POST"])
@@ -111,6 +152,11 @@ def products(request):
         "instock": validated.get("instock", True),
         "marka": validated.get("marka"),
         "category_id": validated["category"],
+        "original_price": validated.get("original_price"),
+        "badge": validated.get("badge"),
+        "description": validated.get("description"),
+        "features": validated.get("features", []),
+        "specifications": validated.get("specifications", {}),
     }
     media_data = validated.get("media", [])
     new_id = product_service.create(product_data, media_data)
@@ -131,7 +177,8 @@ def product_detail(request, product_id: int):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         validated = serializer.validated_data
         product_data = {}
-        for field in ["name", "price", "instock", "marka"]:
+        for field in ["name", "price", "instock", "marka", "original_price",
+                      "badge", "description", "features", "specifications"]:
             if field in validated:
                 product_data[field] = validated[field]
         if "category" in validated:
@@ -147,10 +194,57 @@ def product_detail(request, product_id: int):
     return Response({"deleted": True})
 
 
-@api_view(["GET"])
+@api_view(["GET", "POST"])
 @permission_classes([AllowAny])
 def brands(request):
-    return Response([_brand_dict(b) for b in Brand.objects.all()])
+    if request.method == "GET":
+        return Response([_brand_dict(b) for b in Brand.objects.all().order_by('name')])
+    serializer = BrandSerializer(data=request.data)
+    if not serializer.is_valid():
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    validated = serializer.validated_data
+    slug = validated.get("slug")
+    if slug and Brand.objects.filter(slug=slug).exists():
+        return Response({"slug": ["This slug is already in use."]}, status=status.HTTP_400_BAD_REQUEST)
+    brand = Brand.objects.create(
+        name=validated["name"],
+        slug=validated.get("slug"),
+        logo_url=validated.get("logo_url")
+    )
+    return Response(_brand_dict(brand), status=status.HTTP_201_CREATED)
+
+
+@api_view(["GET", "PUT", "DELETE"])
+@permission_classes([AllowAny])
+def brand_detail(request, brand_id: int):
+    try:
+        brand = Brand.objects.get(id=brand_id)
+    except Brand.DoesNotExist:
+        return Response({"error": "not found"}, status=status.HTTP_404_NOT_FOUND)
+        
+    if request.method == "GET":
+        return Response(_brand_dict(brand))
+        
+    elif request.method == "PUT":
+        serializer = BrandSerializer(data=request.data, partial=True)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        validated = serializer.validated_data
+        if "name" in validated:
+            brand.name = validated["name"]
+        if "slug" in validated:
+            slug = validated["slug"]
+            if Brand.objects.filter(slug=slug).exclude(id=brand_id).exists():
+                return Response({"slug": ["This slug is already in use."]}, status=status.HTTP_400_BAD_REQUEST)
+            brand.slug = slug
+        if "logo_url" in validated:
+            brand.logo_url = validated["logo_url"]
+        brand.save()
+        return Response(_brand_dict(brand))
+        
+    elif request.method == "DELETE":
+        brand.delete()
+        return Response({"deleted": True})
 
 
 @api_view(["GET", "POST"])
@@ -220,8 +314,13 @@ def contact_messages(request):
     serializer = ContactMessageSerializer(data=request.data)
     if serializer.is_valid():
         user = request.user if request.user.is_authenticated else None
-        serializer.save(user=user)
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+        msg = serializer.save(user=user)
+        try:
+            from management.ws_utils import broadcast_order_event
+            broadcast_order_event("message_created", {"message": ContactMessageSerializer(msg).data})
+        except Exception as e:
+            print("Failed to broadcast message_created:", e)
+        return Response(ContactMessageSerializer(msg).data, status=status.HTTP_201_CREATED)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(["PUT", "DELETE"])
@@ -233,6 +332,11 @@ def contact_message_detail(request, message_id: int):
         return Response({"error": "not found"}, status=status.HTTP_404_NOT_FOUND)
         
     if request.method == "DELETE":
+        try:
+            from management.ws_utils import broadcast_order_event
+            broadcast_order_event("message_deleted", {"message_id": message_id})
+        except Exception as e:
+            print("Failed to broadcast message_deleted:", e)
         msg.delete()
         return Response({"deleted": True})
         
@@ -258,6 +362,11 @@ def contact_message_detail(request, message_id: int):
             
     if updated:
         msg.save()
+        try:
+            from management.ws_utils import broadcast_order_event
+            broadcast_order_event("message_updated", {"message": ContactMessageSerializer(msg).data})
+        except Exception as e:
+            print("Failed to broadcast message_updated:", e)
 
     return Response(ContactMessageSerializer(msg).data)
 

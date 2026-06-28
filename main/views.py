@@ -1,12 +1,13 @@
 from decimal import Decimal
 
+from django.db import transaction
 from django.utils.dateparse import parse_date
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
-from .models import Appointment, Customer, Equipment, Expense, Order, OrderDay, OrderStaff, Banner, Promo, OrderType
+from .models import Appointment, Customer, Equipment, Expense, Order, OrderDay, OrderStaff, Banner, Promo, OrderType, MobileAppVersion
 from .services import AppointmentService, CustomerService, EquipmentService, ExpenseService, OrderService
 
 customer_service = CustomerService()
@@ -222,6 +223,13 @@ def orders(request):
             continue
         staff_data.append({"user_id": st["user_id"], "role": st.get("role")})
     new_id = order_service.create(order_data, days_data, staff_data)
+    o = order_service.get_by_id(new_id)
+    if o:
+        try:
+            from management.ws_utils import broadcast_order_event
+            broadcast_order_event("main_order_created", {"order": _order_dict(o)})
+        except Exception as e:
+            print("Failed to broadcast main_order_created:", e)
     return Response({"id": new_id}, status=status.HTTP_201_CREATED)
 
 
@@ -261,7 +269,19 @@ def order_detail(request, order_id: int):
         updated = order_service.update(order_id, order_data, days_data, staff_data)
         if not updated:
             return Response({"error": "not found"}, status=status.HTTP_404_NOT_FOUND)
+        o = order_service.get_by_id(order_id)
+        if o:
+            try:
+                from management.ws_utils import broadcast_order_event
+                broadcast_order_event("main_order_updated", {"order": _order_dict(o)})
+            except Exception as e:
+                print("Failed to broadcast main_order_updated:", e)
         return Response({"updated": True})
+    try:
+        from management.ws_utils import broadcast_order_event
+        broadcast_order_event("main_order_deleted", {"order_id": order_id})
+    except Exception as e:
+        print("Failed to broadcast main_order_deleted:", e)
     deleted = order_service.delete(order_id)
     if not deleted:
         return Response({"error": "not found"}, status=status.HTTP_404_NOT_FOUND)
@@ -401,3 +421,123 @@ def banners(request):
 @permission_classes([AllowAny])
 def promos(request):
     return Response([_promo_dict(p) for p in Promo.objects.all()])
+
+
+def _mobile_app_version_dict(request, version):
+    return {
+        "id": version.id,
+        "version_name": version.version_name,
+        "version_code": version.version_code,
+        "file_url": request.build_absolute_uri(version.file.url) if version.file else None,
+        "is_active": version.is_active,
+        "description": version.description,
+        "created_at": version.created_at.isoformat(),
+        "updated_at": version.updated_at.isoformat(),
+    }
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def active_mobile_app(request):
+    """Get the currently active mobile app version details."""
+    active_version = MobileAppVersion.objects.filter(is_active=True).first()
+    if not active_version:
+        return Response(None)
+    return Response(_mobile_app_version_dict(request, active_version))
+
+
+@api_view(["GET", "POST"])
+def mobile_app_versions(request):
+    """
+    Admin-only endpoints:
+    GET: List all uploaded versions.
+    POST: Upload a new version (APK file, version name, version code, description, active flag).
+    """
+    # Admin Permission Check
+    if not (request.user.is_authenticated and (request.user.is_superuser or (request.user.role and request.user.role.name == "Admin"))):
+        return Response({"error": "Rugsadyňyz ýok"}, status=status.HTTP_403_FORBIDDEN)
+
+    if request.method == "GET":
+        versions = MobileAppVersion.objects.all().order_by("-version_code", "-created_at")
+        return Response([_mobile_app_version_dict(request, v) for v in versions])
+
+    if request.method == "POST":
+        data = request.data
+        file_obj = request.FILES.get("file")
+        version_name = data.get("version_name")
+        version_code_str = data.get("version_code")
+        description = data.get("description", "")
+        is_active_val = data.get("is_active")
+
+        # Convert is_active to boolean
+        is_active = is_active_val in [True, "true", "True", 1, "1"]
+
+        if not all([file_obj, version_name, version_code_str]):
+            return Response({"error": "Wersiýa ady, wersiýa kody we APK faýly gerek"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            version_code = int(version_code_str)
+        except ValueError:
+            return Response({"error": "Wersiýa kody san bolmaly"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            with transaction.atomic():
+                # If activating, deactivate all other versions first
+                if is_active:
+                    MobileAppVersion.objects.filter(is_active=True).update(is_active=False)
+
+                version = MobileAppVersion.objects.create(
+                    version_name=version_name,
+                    version_code=version_code,
+                    file=file_obj,
+                    is_active=is_active,
+                    description=description
+                )
+            return Response(_mobile_app_version_dict(request, version), status=status.HTTP_201_CREATED)
+        except Exception as e:
+            return Response({"error": f"Ýalňyşlyk ýüze çykdy: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["POST"])
+def activate_mobile_app_version(request, version_id: int):
+    """Admin-only endpoint to activate a specific mobile app version."""
+    if not (request.user.is_authenticated and (request.user.is_superuser or (request.user.role and request.user.role.name == "Admin"))):
+        return Response({"error": "Rugsadyňyz ýok"}, status=status.HTTP_403_FORBIDDEN)
+
+    try:
+        version = MobileAppVersion.objects.get(id=version_id)
+    except MobileAppVersion.DoesNotExist:
+        return Response({"error": "Wersiýa tapylmady"}, status=status.HTTP_404_NOT_FOUND)
+
+    try:
+        with transaction.atomic():
+            # Deactivate all other versions
+            MobileAppVersion.objects.filter(is_active=True).update(is_active=False)
+            # Activate selected version
+            version.is_active = True
+            version.save()
+        return Response({"success": True, "version": _mobile_app_version_dict(request, version)})
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["DELETE"])
+def delete_mobile_app_version(request, version_id: int):
+    """Admin-only endpoint to delete a specific mobile app version and its physical file."""
+    if not (request.user.is_authenticated and (request.user.is_superuser or (request.user.role and request.user.role.name == "Admin"))):
+        return Response({"error": "Rugsadyňyz ýok"}, status=status.HTTP_403_FORBIDDEN)
+
+    try:
+        version = MobileAppVersion.objects.get(id=version_id)
+    except MobileAppVersion.DoesNotExist:
+        return Response({"error": "Wersiýa tapylmady"}, status=status.HTTP_404_NOT_FOUND)
+
+    try:
+        # Delete file from disk
+        if version.file:
+            version.file.delete(save=False)
+        # Delete database record
+        version.delete()
+        return Response({"success": True})
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

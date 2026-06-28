@@ -48,6 +48,15 @@ class Campaign(models.Model):
     def __str__(self) -> str:
         return f"[{self.type}] {self.title}"
 
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        # Automatically sync the rules text field to CampaignRule objects
+        self.rules_list.all().delete()
+        if self.rules:
+            lines = [line.strip() for line in self.rules.split('\n') if line.strip()]
+            for idx, line in enumerate(lines):
+                CampaignRule.objects.create(campaign=self, text=line, order=idx)
+
     @property
     def participants_count(self) -> int:
         return self.participants.count()
@@ -103,6 +112,26 @@ class CampaignParticipation(models.Model):
 
     def __str__(self) -> str:
         return f"{self.full_name or (self.user and self.user.username) or 'anonim'} -> {self.campaign.title}"
+
+    def save(self, *args, **kwargs):
+        is_new = self.pk is None
+        old_status = None
+        if not is_new:
+            try:
+                old_status = CampaignParticipation.objects.get(pk=self.pk).status
+            except CampaignParticipation.DoesNotExist:
+                pass
+        
+        super().save(*args, **kwargs)
+        
+        if self.status == 'won' and old_status != 'won':
+            CampaignWinner.objects.get_or_create(
+                campaign=self.campaign,
+                participant=self,
+                defaults={'prize_title': self.campaign.prize_title or 'Aksiýa Sowgady'}
+            )
+        elif self.status != 'won' and old_status == 'won':
+            CampaignWinner.objects.filter(campaign=self.campaign, participant=self).delete()
 
 
 class CampaignWinner(models.Model):

@@ -115,6 +115,7 @@ class Order(models.Model):
         related_name="orders",
     )
     created_at = models.DateTimeField(default=timezone.now)
+    status = models.CharField(max_length=50, default="pending")
 
     class Meta:
         ordering = ["-created_at"]
@@ -137,16 +138,6 @@ class OrderDay(models.Model):
     def __str__(self) -> str:
         return f"{self.order_id} - {self.date}"
 
-
-class OrderDayEquipment(models.Model):
-    order_day = models.ForeignKey(
-        OrderDay, on_delete=models.CASCADE, related_name="equipments"
-    )
-    equipment = models.ForeignKey(Equipment, on_delete=models.CASCADE)
-    count = models.IntegerField(default=1)
-
-    def __str__(self) -> str:
-        return f"{self.order_day_id} - {self.equipment_id} x{self.count}"
 
 
 class OrderDayService(models.Model):

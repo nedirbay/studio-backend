@@ -111,6 +111,7 @@ class OrderSerializer(serializers.ModelSerializer):
             "remaining_amount",
             "order_type",
             "created_at",
+            "status",
             "days",
             "staff",
         ]

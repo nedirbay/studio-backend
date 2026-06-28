@@ -40,12 +40,14 @@ ALLOWED_HOSTS = ["*", "localhost", "127.0.0.1", "testserver"]
 # Application definition
 
 INSTALLED_APPS = [
+    'daphne',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'channels',
     'rest_framework',
     'drf_spectacular',
     'identity',
@@ -91,6 +93,13 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'studio_api.wsgi.application'
+ASGI_APPLICATION = 'studio_api.asgi.application'
+
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels.layers.InMemoryChannelLayer",
+    },
+}
 
 
 # Database
@@ -175,3 +184,11 @@ DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
 
 # Google Sign-In
 GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID', '')
+
+# JWT Settings
+from datetime import timedelta
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(days=30),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=90),
+}
+

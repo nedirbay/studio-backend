@@ -20,6 +20,10 @@ urlpatterns = [
     path("stats/financial", views.financial_stats),
     path("banners", views.banners),
     path("promos", views.promos),
+    path("mobile-apps/active", views.active_mobile_app),
+    path("mobile-apps/versions", views.mobile_app_versions),
+    path("mobile-apps/versions/<int:version_id>/activate", views.activate_mobile_app_version),
+    path("mobile-apps/versions/<int:version_id>", views.delete_mobile_app_version),
     path("schema", SpectacularAPIView.as_view(permission_classes=[AllowAny]), name="schema"),
     path(
         "docs",

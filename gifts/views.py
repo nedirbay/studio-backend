@@ -1,6 +1,8 @@
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from django.db import models
+from django.utils import timezone
 
 from .models import Campaign, CampaignParticipation
 from .serializers import CampaignSerializer, CampaignParticipationSerializer
@@ -17,8 +19,19 @@ class CampaignViewSet(viewsets.ModelViewSet):
         status_q = self.request.query_params.get('status')
         if type_q:
             qs = qs.filter(type=type_q)
+        
+        now = timezone.now()
         if status_q:
-            qs = qs.filter(status=status_q)
+            if status_q != 'all':
+                qs = qs.filter(status=status_q)
+        else:
+            # Client-side: only show active and unexpired campaigns
+            qs = qs.filter(
+                status='active',
+                starts_at__lte=now
+            ).filter(
+                models.Q(ends_at__isnull=True) | models.Q(ends_at__gte=now)
+            )
         return qs
 
     @action(detail=True, methods=['get', 'post'], permission_classes=[permissions.AllowAny])
@@ -67,3 +80,9 @@ class CampaignViewSet(viewsets.ModelViewSet):
         qs = self.get_queryset().filter(is_featured=True, status='active')
         serializer = self.get_serializer(qs, many=True)
         return Response(serializer.data)
+
+
+class CampaignParticipationViewSet(viewsets.ModelViewSet):
+    queryset = CampaignParticipation.objects.all()
+    serializer_class = CampaignParticipationSerializer
+    permission_classes = [permissions.AllowAny]

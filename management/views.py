@@ -24,6 +24,7 @@ from .services import (
     OrderTypeService,
     ServiceCatalogService,
 )
+from .ws_utils import broadcast_order_event
 
 customer_service = CustomerService()
 appointment_service = AppointmentService()
@@ -72,15 +73,7 @@ def _order_day_dict(day):
         "address": day.address,
         "daily_price": float(day.daily_price),
         "time": day.time,
-        "equipments": [
-            {
-                "id": e.id,
-                "equipment_id": e.equipment_id,
-                "equipment_name": e.equipment.name,
-                "count": e.count,
-            }
-            for e in day.equipments.all()
-        ],
+        "equipments": [],
         "services": [
             {
                 "id": s.id,
@@ -122,6 +115,7 @@ def _order_dict(order):
         "remaining_amount": float(order.remaining_amount),
         "order_type_id": order.order_type_id,
         "created_at": order.created_at.isoformat(),
+        "status": order.status,
         "days": [_order_day_dict(d) for d in order.days.all()],
         "staff": [_order_staff_dict(s) for s in order.staff.all()],
     }
@@ -178,6 +172,7 @@ def _build_order_payload(data):
         "total_amount": _to_decimal(data.get("total_amount", 0)),
         "paid_amount": _to_decimal(data.get("paid_amount", 0)),
         "order_type_id": data.get("order_type_id"),
+        "status": data.get("status", "pending"),
     }
     days_data = []
     for day in data.get("days", []):
@@ -189,11 +184,7 @@ def _build_order_payload(data):
                 "address": day["address"],
                 "daily_price": _to_decimal(day["daily_price"]),
                 "time": day.get("time"),
-                "equipments": [
-                    {"equipment_id": e["equipment_id"], "count": e.get("count", 1)}
-                    for e in day.get("equipments", [])
-                    if "equipment_id" in e
-                ],
+                "equipments": [],
                 "services": [
                     {"service_id": s["service_id"], "count": s.get("count", 1)}
                     for s in day.get("services", [])
@@ -312,10 +303,13 @@ def orders(request):
         return Response({"error": "missing fields"}, status=status.HTTP_400_BAD_REQUEST)
     order_data, days_data, staff_data = _build_order_payload(data)
     new_id = order_service.create(order_data, days_data, staff_data)
+    o = order_service.get_by_id(new_id)
+    if o:
+        broadcast_order_event("order_created", {"order": _order_dict(o)})
     return Response({"id": new_id}, status=status.HTTP_201_CREATED)
 
 
-@api_view(["GET", "PUT", "DELETE"])
+@api_view(["GET", "PUT", "DELETE", "PATCH"])
 def order_detail(request, order_id: int):
     if request.method == "GET":
         order = order_service.get_by_id(order_id)
@@ -326,7 +320,23 @@ def order_detail(request, order_id: int):
         order_data, days_data, staff_data = _build_order_payload(request.data)
         if not order_service.update(order_id, order_data, days_data, staff_data):
             return Response({"error": "not found"}, status=status.HTTP_404_NOT_FOUND)
+        o = order_service.get_by_id(order_id)
+        if o:
+            broadcast_order_event("order_updated", {"order": _order_dict(o)})
         return Response({"updated": True})
+    if request.method == "PATCH":
+        status_val = request.data.get("status")
+        if not status_val:
+            return Response({"error": "status required"}, status=status.HTTP_400_BAD_REQUEST)
+        order = order_service.get_by_id(order_id)
+        if not order:
+            return Response({"error": "not found"}, status=status.HTTP_404_NOT_FOUND)
+        order.status = status_val
+        order.save()
+        broadcast_order_event("order_updated", {"order": _order_dict(order)})
+        return Response(_order_dict(order))
+    # For delete, we must broadcast before deleting
+    broadcast_order_event("order_deleted", {"order_id": order_id})
     if not order_service.delete(order_id):
         return Response({"error": "not found"}, status=status.HTTP_404_NOT_FOUND)
     return Response({"deleted": True})

@@ -21,7 +21,6 @@ from .models import (
     GalleryItem,
     Order,
     OrderDay,
-    OrderDayEquipment,
     OrderDayService,
     OrderStaff,
     OrderStaffEquipment,
@@ -87,7 +86,6 @@ class AppointmentService:
 class OrderService:
     def _base_qs(self):
         return Order.objects.prefetch_related(
-            "days__equipments__equipment",
             "days__services__service",
             "staff__user",
             "staff__equipments__equipment",
@@ -127,15 +125,9 @@ class OrderService:
 
     def _sync_days(self, order: Order, days_data: list):
         for day in days_data:
-            equipments = day.pop("equipments", [])
+            day.pop("equipments", None)
             services = day.pop("services", [])
             order_day = OrderDay.objects.create(order=order, **day)
-            for eq in equipments:
-                OrderDayEquipment.objects.create(
-                    order_day=order_day,
-                    equipment_id=eq["equipment_id"],
-                    count=eq.get("count", 1),
-                )
             for sv in services:
                 OrderDayService.objects.create(
                     order_day=order_day,
