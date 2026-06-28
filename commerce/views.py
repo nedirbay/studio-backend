@@ -48,12 +48,48 @@ def _brand_dict(brand: Brand):
     }
 
 
-def _media_dict(media: ProductMedia):
-    return {"id": media.id, "kind": media.kind, "url": media.url, "created_at": media.created_at.isoformat()}
+def _media_dict(media: ProductMedia, request=None):
+    url = media.url
+    if url and not (url.startswith('http://') or url.startswith('https://')):
+        if request:
+            url = request.build_absolute_uri(url)
+        else:
+            url = f"http://127.0.0.1:8000{url}" if url.startswith('/') else f"http://127.0.0.1:8000/{url}"
+    return {"id": media.id, "kind": media.kind, "url": url, "created_at": media.created_at.isoformat()}
 
-def _product_dict(prod: Product):
+def _product_list_dict(prod: Product, request=None):
+    """Card üçin ýeňil maglumat — artykmaç description/features/specifications ýok"""
+    first_media = prod.media.first()
+    image_url = None
+    if first_media:
+        url = first_media.url
+        if url.startswith('http://') or url.startswith('https://'):
+            image_url = url
+        elif request:
+            image_url = request.build_absolute_uri(url)
+        else:
+            image_url = f"http://127.0.0.1:8000{url}" if url.startswith('/') else f"http://127.0.0.1:8000/{url}"
     return {
         "id": prod.id,
+        "slug": prod.slug,
+        "name": prod.name,
+        "price": float(prod.price),
+        "original_price": float(prod.original_price) if prod.original_price else None,
+        "instock": prod.instock,
+        "rating": float(prod.rating),
+        "reviews": prod.reviews,
+        "badge": prod.badge,
+        "marka": prod.marka,
+        "category_id": prod.category_id,
+        "category_name": prod.category.name if prod.category else None,
+        "image": image_url,
+    }
+
+def _product_dict(prod: Product, request=None):
+    """Detail sahypa üçin doly maglumat"""
+    return {
+        "id": prod.id,
+        "slug": prod.slug,
         "name": prod.name,
         "price": float(prod.price),
         "original_price": float(prod.original_price) if prod.original_price else None,
@@ -68,7 +104,7 @@ def _product_dict(prod: Product):
         "marka": prod.marka,
         "category_id": prod.category_id,
         "category_name": prod.category.name if prod.category else None,
-        "media": [_media_dict(m) for m in prod.media.all()],
+        "media": [_media_dict(m, request) for m in prod.media.all()],
     }
 
 def _review_dict(review: Review):
@@ -80,7 +116,8 @@ def _review_dict(review: Review):
         "title": review.title,
         "content": review.content,
         "createdAt": review.created_at.isoformat(),
-        "helpful": 0 # Not implemented in DB yet, but for frontend compatibility
+        "helpful": 0,
+        "is_read": review.is_read
     }
 
 
@@ -141,7 +178,7 @@ def category_detail(request, category_id: int):
 @permission_classes([AllowAny])
 def products(request):
     if request.method == "GET":
-        return Response([_product_dict(p) for p in product_service.get_all()])
+        return Response([_product_list_dict(p, request) for p in product_service.get_all()])
     serializer = ProductSerializer(data=request.data)
     if not serializer.is_valid():
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -170,7 +207,7 @@ def product_detail(request, product_id: int):
         prod = product_service.get_by_id(product_id)
         if not prod:
             return Response({"error": "not found"}, status=status.HTTP_404_NOT_FOUND)
-        return Response(_product_dict(prod))
+        return Response(_product_dict(prod, request))
     if request.method == "PUT":
         serializer = ProductSerializer(data=request.data, partial=True)
         if not serializer.is_valid():
@@ -192,6 +229,15 @@ def product_detail(request, product_id: int):
     if not deleted:
         return Response({"error": "not found"}, status=status.HTTP_404_NOT_FOUND)
     return Response({"deleted": True})
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def product_detail_by_slug(request, slug: str):
+    prod = product_service.get_by_slug(slug)
+    if not prod:
+        return Response({"error": "not found"}, status=status.HTTP_404_NOT_FOUND)
+    return Response(_product_dict(prod, request))
 
 
 @api_view(["GET", "POST"])
@@ -274,30 +320,85 @@ def product_reviews(request, product_id: int):
         content=content
     )
     
+    # Broadcast event
+    try:
+        from management.ws_utils import broadcast_order_event
+        d = _review_dict(review)
+        d['productName'] = review.product.name if review.product else 'Näbelli haryt'
+        d['productId'] = review.product_id
+        broadcast_order_event("review_created", {"review": d})
+    except Exception as e:
+        print("Failed to broadcast review_created:", e)
+        
     return Response(_review_dict(review), status=status.HTTP_201_CREATED)
 
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def all_reviews(request):
     reviews = Review.objects.all().select_related('user', 'product').order_by('-created_at')
-    # Add product details for admin view
+    
+    # Search filter
+    search = request.query_params.get('search')
+    if search:
+        from django.db.models import Q
+        reviews = reviews.filter(
+            Q(user__username__icontains=search) | 
+            Q(product__name__icontains=search) | 
+            Q(content__icontains=search)
+        )
+        
+    # Rating filter
+    rating = request.query_params.get('rating')
+    if rating:
+        reviews = reviews.filter(rating=rating)
+        
+    # Page pagination
+    from rest_framework.pagination import PageNumberPagination
+    paginator = PageNumberPagination()
+    paginator.page_size = 10
+    paginated_reviews = paginator.paginate_queryset(reviews, request)
+    
     result = []
-    for r in reviews:
+    for r in paginated_reviews:
         d = _review_dict(r)
         d['productName'] = r.product.name if r.product else 'Näbelli haryt'
         d['productId'] = r.product_id
         result.append(d)
-    return Response(result)
+        
+    return paginator.get_paginated_response(result)
 
-@api_view(["DELETE"])
+@api_view(["DELETE", "PUT"])
 @permission_classes([AllowAny])
 def review_detail(request, review_id: int):
     try:
         review = Review.objects.get(id=review_id)
-        review.delete()
-        return Response({"deleted": True})
     except Review.DoesNotExist:
         return Response({"error": "not found"}, status=status.HTTP_404_NOT_FOUND)
+        
+    if request.method == "DELETE":
+        review_id = review.id
+        review.delete()
+        try:
+            from management.ws_utils import broadcast_order_event
+            broadcast_order_event("review_deleted", {"review_id": review_id})
+        except Exception as e:
+            print("Failed to broadcast review_deleted:", e)
+        return Response({"deleted": True})
+        
+    elif request.method == "PUT":
+        if "is_read" in request.data:
+            review.is_read = request.data["is_read"]
+            review.save()
+            
+        d = _review_dict(review)
+        d['productName'] = review.product.name if review.product else 'Näbelli haryt'
+        d['productId'] = review.product_id
+        try:
+            from management.ws_utils import broadcast_order_event
+            broadcast_order_event("review_updated", {"review": d})
+        except Exception as e:
+            print("Failed to broadcast review_updated:", e)
+        return Response(d)
 
 from .models import ContactMessage
 from .serializers import ContactMessageSerializer
@@ -375,8 +476,15 @@ from .models import Order, OrderItem
 from .serializers import OrderSerializer, OrderItemSerializer
 
 class OrderViewSet(viewsets.ModelViewSet):
-    queryset = Order.objects.all().order_by('-created_at')
     serializer_class = OrderSerializer
+
+    def get_queryset(self):
+        user = self.request.user
+        if not user or not user.is_authenticated:
+            return Order.objects.none()
+        if user.is_staff or user.is_superuser:
+            return Order.objects.all().order_by('-created_at')
+        return Order.objects.filter(user=user).order_by('-created_at')
 
     def get_permissions(self):
         if self.action == 'create':
@@ -385,6 +493,32 @@ class OrderViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         if self.request.user.is_authenticated:
-            serializer.save(user=self.request.user)
+            order = serializer.save(user=self.request.user)
         else:
-            serializer.save()
+            order = serializer.save()
+        
+        # Broadcast via WebSocket
+        try:
+            from management.ws_utils import broadcast_order_event
+            broadcast_order_event("commerce_order_created", {"order": OrderSerializer(order).data})
+        except Exception as e:
+            print("Failed to broadcast commerce_order_created:", e)
+
+    def perform_update(self, serializer):
+        order = serializer.save()
+        # Broadcast via WebSocket
+        try:
+            from management.ws_utils import broadcast_order_event
+            broadcast_order_event("commerce_order_updated", {"order": OrderSerializer(order).data})
+        except Exception as e:
+            print("Failed to broadcast commerce_order_updated:", e)
+
+    def perform_destroy(self, instance):
+        order_id = instance.id
+        instance.delete()
+        # Broadcast via WebSocket
+        try:
+            from management.ws_utils import broadcast_order_event
+            broadcast_order_event("commerce_order_deleted", {"order_id": order_id})
+        except Exception as e:
+            print("Failed to broadcast commerce_order_deleted:", e)

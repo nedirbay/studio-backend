@@ -20,6 +20,9 @@ class ProductService:
     def get_by_id(self, product_id: int) -> Optional[Product]:
         return Product.objects.filter(id=product_id).select_related('category').prefetch_related('media').first()
 
+    def get_by_slug(self, slug: str) -> Optional[Product]:
+        return Product.objects.filter(slug=slug).select_related('category').prefetch_related('media').first()
+
     @transaction.atomic
     def create(self, product_data: dict, media_data: list) -> int:
         product = Product.objects.create(**product_data)

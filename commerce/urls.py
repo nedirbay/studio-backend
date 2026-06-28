@@ -9,6 +9,7 @@ urlpatterns = [
     path("brands", views.brands),
     path("brands/<int:brand_id>", views.brand_detail),
     path("products/<int:product_id>", views.product_detail),
+    path("products/<str:slug>", views.product_detail_by_slug),
     path("upload", views.upload_image),
 ]
 urlpatterns += [
@@ -18,5 +19,5 @@ urlpatterns += [
     path("messages", views.contact_messages),
     path("messages/<int:message_id>", views.contact_message_detail),
     path("orders", views.OrderViewSet.as_view({'get': 'list', 'post': 'create'})),
-    path("orders/<int:pk>", views.OrderViewSet.as_view({'get': 'retrieve', 'put': 'update', 'delete': 'destroy'})),
+    path("orders/<int:pk>", views.OrderViewSet.as_view({'get': 'retrieve', 'put': 'update', 'patch': 'partial_update', 'delete': 'destroy'})),
 ]

@@ -108,6 +108,7 @@ def _order_staff_dict(staff):
 def _order_dict(order):
     return {
         "id": order.id,
+        "user_id": order.user_id,
         "customer_name": order.customer_name,
         "customer_phone": order.customer_phone,
         "total_amount": float(order.total_amount),
@@ -296,12 +297,18 @@ def appointment_detail(request, appointment_id: int):
 @api_view(["GET", "POST"])
 def orders(request):
     if request.method == "GET":
-        return Response([_order_dict(o) for o in order_service.get_all()])
+        orders_qs = order_service.get_all()
+        # Admins and staff see all orders, regular users see only their own
+        if not (request.user.is_superuser or (request.user.role and request.user.role.name == "Admin")):
+            orders_qs = [o for o in orders_qs if o.user_id == request.user.id]
+        return Response([_order_dict(o) for o in orders_qs])
     data = request.data
     required = ["customer_name", "customer_phone", "total_amount", "paid_amount"]
     if not all(f in data for f in required):
         return Response({"error": "missing fields"}, status=status.HTTP_400_BAD_REQUEST)
     order_data, days_data, staff_data = _build_order_payload(data)
+    if request.user.is_authenticated:
+        order_data["user"] = request.user
     new_id = order_service.create(order_data, days_data, staff_data)
     o = order_service.get_by_id(new_id)
     if o:
@@ -311,10 +318,16 @@ def orders(request):
 
 @api_view(["GET", "PUT", "DELETE", "PATCH"])
 def order_detail(request, order_id: int):
+    order = order_service.get_by_id(order_id)
+    if not order:
+        return Response({"error": "not found"}, status=status.HTTP_404_NOT_FOUND)
+    
+    # Check permissions: Admin/staff can access any order, regular users only their own
+    if not (request.user.is_superuser or (request.user.role and request.user.role.name == "Admin")):
+        if order.user_id != request.user.id:
+            return Response({"error": "Rugsadyňyz ýok"}, status=status.HTTP_403_FORBIDDEN)
+
     if request.method == "GET":
-        order = order_service.get_by_id(order_id)
-        if not order:
-            return Response({"error": "not found"}, status=status.HTTP_404_NOT_FOUND)
         return Response(_order_dict(order))
     if request.method == "PUT":
         order_data, days_data, staff_data = _build_order_payload(request.data)
@@ -328,9 +341,6 @@ def order_detail(request, order_id: int):
         status_val = request.data.get("status")
         if not status_val:
             return Response({"error": "status required"}, status=status.HTTP_400_BAD_REQUEST)
-        order = order_service.get_by_id(order_id)
-        if not order:
-            return Response({"error": "not found"}, status=status.HTTP_404_NOT_FOUND)
         order.status = status_val
         order.save()
         broadcast_order_event("order_updated", {"order": _order_dict(order)})

@@ -46,6 +46,27 @@ class OrderConsumer(AsyncWebsocketConsumer):
             'order_id': order_id
         }))
 
+    async def commerce_order_created(self, event):
+        order = event['order']
+        await self.send(text_data=json.dumps({
+            'type': 'commerce_order.created',
+            'order': order
+        }))
+
+    async def commerce_order_updated(self, event):
+        order = event['order']
+        await self.send(text_data=json.dumps({
+            'type': 'commerce_order.updated',
+            'order': order
+        }))
+
+    async def commerce_order_deleted(self, event):
+        order_id = event['order_id']
+        await self.send(text_data=json.dumps({
+            'type': 'commerce_order.deleted',
+            'order_id': order_id
+        }))
+
     # Main Order Events
     async def main_order_created(self, event):
         order = event['order']
@@ -88,4 +109,26 @@ class OrderConsumer(AsyncWebsocketConsumer):
         await self.send(text_data=json.dumps({
             'type': 'message.deleted',
             'message_id': message_id
+        }))
+
+    # Review Events
+    async def review_created(self, event):
+        review = event['review']
+        await self.send(text_data=json.dumps({
+            'type': 'review.created',
+            'review': review
+        }))
+
+    async def review_updated(self, event):
+        review = event['review']
+        await self.send(text_data=json.dumps({
+            'type': 'review.updated',
+            'review': review
+        }))
+
+    async def review_deleted(self, event):
+        review_id = event['review_id']
+        await self.send(text_data=json.dumps({
+            'type': 'review.deleted',
+            'review_id': review_id
         }))

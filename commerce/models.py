@@ -27,6 +27,7 @@ class Category(models.Model):
 
 class Product(models.Model):
     name = models.CharField(max_length=200)
+    slug = models.SlugField(max_length=220, unique=True, null=True, blank=True)
     price = models.DecimalField(max_digits=12, decimal_places=2)
     original_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     instock = models.BooleanField(default=True)
@@ -39,6 +40,17 @@ class Product(models.Model):
     marka = models.CharField(max_length=150, null=True, blank=True)
     category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name="products")
     created_at = models.DateTimeField(default=timezone.now)
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            base_slug = slugify(self.name)
+            slug = base_slug
+            counter = 1
+            while Product.objects.filter(slug=slug).exclude(id=self.id).exists():
+                slug = f"{base_slug}-{counter}"
+                counter += 1
+            self.slug = slug
+        super().save(*args, **kwargs)
 
     def __str__(self) -> str:
         return self.name
@@ -85,6 +97,7 @@ class Review(models.Model):
     rating = models.IntegerField(default=5)
     title = models.CharField(max_length=150, blank=True, null=True)
     content = models.TextField()
+    is_read = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

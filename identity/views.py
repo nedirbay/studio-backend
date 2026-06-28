@@ -1,10 +1,11 @@
 from rest_framework import status
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
 from django.db import transaction
+from django.db.models import Q
 from django.core.mail import send_mail
 from django.conf import settings
 from django.utils import timezone
@@ -18,14 +19,50 @@ from .models import User, OTPCode, Role
 from .serializers import UserRegisterSerializer, UserLoginSerializer, UserSerializer, AdminUserSerializer
 from rest_framework import viewsets
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
+from rest_framework.pagination import PageNumberPagination
+
+class StandardResultsSetPagination(PageNumberPagination):
+    page_size = 10
+    page_size_query_param = 'page_size'
+    max_page_size = 100
 
 class AdminUserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all().order_by('-date_joined')
     serializer_class = AdminUserSerializer
-    # Temporarily allow any or require Auth, ideally IsAdminUser
-    # Given the frontend is sending the token, IsAdminUser is best if they are superuser or staff.
-    # For now, IsAuthenticated since our custom Role-based admin might not use is_staff.
     permission_classes = [IsAuthenticated]
+    pagination_class = StandardResultsSetPagination
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        
+        # Search filter
+        search = self.request.query_params.get('search')
+        if search:
+            queryset = queryset.filter(
+                Q(username__icontains=search) | 
+                Q(email__icontains=search)
+            )
+            
+        # Role filter
+        role = self.request.query_params.get('role')
+        if role:
+            queryset = queryset.filter(role__name=role)
+            
+        return queryset
+
+    @action(detail=False, methods=['post'], url_path='bulk-delete')
+    def bulk_delete(self, request):
+        user_ids = request.data.get('user_ids', [])
+        if not user_ids:
+            return Response({'error': 'No user IDs provided'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Prevent users from deleting themselves
+        current_user = request.user
+        if current_user.id in user_ids:
+            user_ids = [uid for uid in user_ids if uid != current_user.id]
+            
+        deleted_count, _ = User.objects.filter(id__in=user_ids).delete()
+        return Response({'deleted_count': deleted_count, 'message': f'Successfully deleted {deleted_count} users'}, status=status.HTTP_200_OK)
 
 
 def _send_otp_email(user, code):

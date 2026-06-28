@@ -103,6 +103,13 @@ class Expense(models.Model):
 
 
 class Order(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="studio_orders",
+    )
     customer_name = models.CharField(max_length=150)
     customer_phone = models.CharField(max_length=50)
     total_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)

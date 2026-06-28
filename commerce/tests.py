@@ -175,7 +175,7 @@ class ReviewTests(APITestCase):
         review = Review.objects.create(product=self.product, user=self.user, rating=5, content="Excellent")
         resp = self.client.get("/api/commerce/reviews")
         self.assertEqual(resp.status_code, 200)
-        self.assertTrue(any(r["id"] == review.id and r.get("productName") == "DSLR" for r in resp.data))
+        self.assertTrue(any(r["id"] == review.id and r.get("productName") == "DSLR" for r in resp.data["results"]))
 
         resp = self.client.delete(f"/api/commerce/reviews/{review.id}")
         self.assertEqual(resp.status_code, 200)
