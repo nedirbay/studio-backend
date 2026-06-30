@@ -372,3 +372,21 @@ def reset_password_view(request):
     otp_record.delete() # Cleanup
 
     return Response({"message": "Parol üstünlikli çalşyldy! Indi täze parolyňyz bilen girip bilersiňiz."})
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def change_password_view(request):
+    old_password = request.data.get("old_password")
+    new_password = request.data.get("new_password")
+    
+    if not all([old_password, new_password]):
+        return Response({"detail": "Köne we täze parol gerek"}, status=status.HTTP_400_BAD_REQUEST)
+        
+    user = request.user
+    if not user.check_password(old_password):
+        return Response({"detail": "Köne parol nädogry"}, status=status.HTTP_400_BAD_REQUEST)
+        
+    user.set_password(new_password)
+    user.save()
+    return Response({"message": "Parol üstünlikli çalşyldy!"})

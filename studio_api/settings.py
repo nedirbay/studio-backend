@@ -192,3 +192,6 @@ SIMPLE_JWT = {
     'REFRESH_TOKEN_LIFETIME': timedelta(days=90),
 }
 
+# Trust the X-Forwarded-Proto header from Nginx proxy to generate HTTPS links
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+

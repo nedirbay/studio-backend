@@ -13,6 +13,7 @@ urlpatterns = [
     path('auth/login', views.login_view, name='login'),
     path('auth/google', views.google_login_view, name='google_login'),
     path('auth/me', views.me_view, name='me'),
+    path('auth/change-password', views.change_password_view, name='change_password'),
     path('auth/forgot-password', views.forgot_password_view, name='forgot_password'),
     path('auth/reset-password', views.reset_password_view, name='reset_password'),
     path('notifications', views.notifications_view, name='notifications'),
