@@ -163,3 +163,13 @@ class MobileAppVersion(models.Model):
     def __str__(self) -> str:
         return f"{self.version_name} ({self.version_code}) - {'Active' if self.is_active else 'Inactive'}"
 
+
+class Currency(models.Model):
+    name = models.CharField(max_length=50)
+    code = models.CharField(max_length=10)
+    symbol = models.CharField(max_length=10)
+    is_active = models.BooleanField(default=False)
+
+    def __str__(self) -> str:
+        return f"{self.name} ({self.code})"
+

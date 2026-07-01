@@ -7,7 +7,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
-from .models import Appointment, Customer, Equipment, Expense, Order, OrderDay, OrderStaff, Banner, Promo, OrderType, MobileAppVersion
+from .models import Appointment, Customer, Equipment, Expense, Order, OrderDay, OrderStaff, Banner, Promo, OrderType, MobileAppVersion, Currency
 from .services import AppointmentService, CustomerService, EquipmentService, ExpenseService, OrderService
 
 customer_service = CustomerService()
@@ -190,8 +190,11 @@ def appointment_update(request, appointment_id: int):
 
 
 @api_view(["GET", "POST"])
+@permission_classes([AllowAny])
 def orders(request):
     if request.method == "GET":
+        if not request.user.is_authenticated:
+            return Response({"detail": "Authentication credentials were not provided."}, status=status.HTTP_401_UNAUTHORIZED)
         items = [_order_dict(o) for o in order_service.get_all()]
         return Response(items)
     data = request.data
@@ -341,10 +344,13 @@ def expenses(request):
     return Response({"id": expense_id}, status=status.HTTP_201_CREATED)
     
 @api_view(["GET", "POST"])
+@permission_classes([AllowAny])
 def order_types(request):
     if request.method == "GET":
         items = [{"id": ot.id, "name": ot.name} for ot in OrderType.objects.all()]
         return Response(items)
+    if not request.user.is_authenticated:
+        return Response({"detail": "Authentication credentials were not provided."}, status=status.HTTP_401_UNAUTHORIZED)
     data = request.data
     if "name" not in data:
         return Response({"error": "name required"}, status=status.HTTP_400_BAD_REQUEST)
@@ -521,10 +527,10 @@ def activate_mobile_app_version(request, version_id: int):
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-@api_view(["DELETE"])
-def delete_mobile_app_version(request, version_id: int):
-    """Admin-only endpoint to delete a specific mobile app version and its physical file."""
-    if not (request.user.is_authenticated and (request.user.is_superuser or (request.user.role and request.user.role.name == "Admin"))):
+@api_view(["PUT", "DELETE"])
+def mobile_app_version_detail(request, version_id: int):
+    """Admin-only endpoint to edit or delete a specific mobile app version."""
+    if not (request.user.is_authenticated and (request.user.is_superuser or (request.user.role and request.user.role.name.lower() == "admin"))):
         return Response({"error": "Rugsadyňyz ýok"}, status=status.HTTP_403_FORBIDDEN)
 
     try:
@@ -532,6 +538,45 @@ def delete_mobile_app_version(request, version_id: int):
     except MobileAppVersion.DoesNotExist:
         return Response({"error": "Wersiýa tapylmady"}, status=status.HTTP_404_NOT_FOUND)
 
+    if request.method == "PUT":
+        data = request.data
+        file_obj = request.FILES.get("file")
+        version_name = data.get("version_name")
+        version_code_str = data.get("version_code")
+        description = data.get("description")
+        is_active_val = data.get("is_active")
+
+        if version_name is not None:
+            version.version_name = version_name
+        if version_code_str is not None:
+            try:
+                version.version_code = int(version_code_str)
+            except ValueError:
+                return Response({"error": "Wersiýa kody san bolmaly"}, status=status.HTTP_400_BAD_REQUEST)
+        if description is not None:
+            version.description = description
+
+        try:
+            with transaction.atomic():
+                if is_active_val is not None:
+                    is_active = is_active_val in [True, "true", "True", 1, "1"]
+                    if is_active and not version.is_active:
+                        # Deactivate all other versions
+                        MobileAppVersion.objects.filter(is_active=True).update(is_active=False)
+                    version.is_active = is_active
+
+                if file_obj is not None:
+                    # Delete old file from disk first
+                    if version.file:
+                        version.file.delete(save=False)
+                    version.file = file_obj
+
+                version.save()
+            return Response(_mobile_app_version_dict(request, version))
+        except Exception as e:
+            return Response({"error": f"Ýalňyşlyk ýüze çykdy: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    # DELETE
     try:
         # Delete file from disk
         if version.file:
@@ -539,5 +584,141 @@ def delete_mobile_app_version(request, version_id: int):
         # Delete database record
         version.delete()
         return Response({"success": True})
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+def _currency_dict(currency):
+    return {
+        "id": currency.id,
+        "name": currency.name,
+        "code": currency.code,
+        "symbol": currency.symbol,
+        "is_active": currency.is_active,
+    }
+
+
+@api_view(["GET", "POST"])
+@permission_classes([AllowAny])
+def currencies(request):
+    """
+    GET: AllowAny. List all currencies.
+    POST: Admin only. Create currency.
+    """
+    if request.method == "GET":
+        items = [_currency_dict(c) for c in Currency.objects.all().order_by("id")]
+        return Response(items)
+
+    # POST (create)
+    if not (request.user.is_authenticated and (request.user.is_superuser or (request.user.role and request.user.role.name.lower() == "admin"))):
+        return Response({"error": "Rugsadyňyz ýok"}, status=status.HTTP_403_FORBIDDEN)
+
+    data = request.data
+    name = data.get("name")
+    code = data.get("code")
+    symbol = data.get("symbol")
+    is_active = data.get("is_active", False) in [True, "true", "True", 1, "1"]
+
+    if not name or not code or not symbol:
+        return Response({"error": "name, code, and symbol are required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        with transaction.atomic():
+            if is_active:
+                Currency.objects.filter(is_active=True).update(is_active=False)
+            curr = Currency.objects.create(
+                name=name,
+                code=code,
+                symbol=symbol,
+                is_active=is_active
+            )
+        return Response(_currency_dict(curr), status=status.HTTP_201_CREATED)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def active_currency(request):
+    """
+    GET: Return the currently active currency.
+    """
+    active = Currency.objects.filter(is_active=True).first()
+    if not active:
+        # Fallback to TMT
+        active, _ = Currency.objects.get_or_create(
+            code="TMT",
+            defaults={"name": "Manat", "symbol": "TMT", "is_active": True}
+        )
+    return Response(_currency_dict(active))
+
+
+@api_view(["PUT", "DELETE"])
+def currency_detail(request, currency_id: int):
+    """
+    Admin only: Edit or delete a currency.
+    """
+    if not (request.user.is_authenticated and (request.user.is_superuser or (request.user.role and request.user.role.name.lower() == "admin"))):
+        return Response({"error": "Rugsadyňyz ýok"}, status=status.HTTP_403_FORBIDDEN)
+
+    try:
+        curr = Currency.objects.get(id=currency_id)
+    except Currency.DoesNotExist:
+        return Response({"error": "Pul birligi tapylmady"}, status=status.HTTP_404_NOT_FOUND)
+
+    if request.method == "PUT":
+        data = request.data
+        name = data.get("name")
+        code = data.get("code")
+        symbol = data.get("symbol")
+        is_active_val = data.get("is_active")
+
+        if name is not None:
+            curr.name = name
+        if code is not None:
+            curr.code = code
+        if symbol is not None:
+            curr.symbol = symbol
+
+        try:
+            with transaction.atomic():
+                if is_active_val is not None:
+                    is_active = is_active_val in [True, "true", "True", 1, "1"]
+                    if is_active and not curr.is_active:
+                        Currency.objects.filter(is_active=True).update(is_active=False)
+                    curr.is_active = is_active
+                curr.save()
+            return Response(_currency_dict(curr))
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    # DELETE
+    try:
+        curr.delete()
+        return Response({"success": True})
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["POST"])
+def activate_currency(request, currency_id: int):
+    """
+    Admin only: Activate a currency.
+    """
+    if not (request.user.is_authenticated and (request.user.is_superuser or (request.user.role and request.user.role.name.lower() == "admin"))):
+        return Response({"error": "Rugsadyňyz ýok"}, status=status.HTTP_403_FORBIDDEN)
+
+    try:
+        curr = Currency.objects.get(id=currency_id)
+    except Currency.DoesNotExist:
+        return Response({"error": "Pul birligi tapylmady"}, status=status.HTTP_404_NOT_FOUND)
+
+    try:
+        with transaction.atomic():
+            # Deactivate all
+            Currency.objects.filter(is_active=True).update(is_active=False)
+            curr.is_active = True
+            curr.save()
+        return Response({"success": True, "currency": _currency_dict(curr)})
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

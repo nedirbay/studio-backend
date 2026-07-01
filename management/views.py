@@ -10,7 +10,8 @@ from decimal import Decimal, InvalidOperation
 
 from django.utils.dateparse import parse_date
 from rest_framework import status
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
 from .services import (
@@ -443,9 +444,12 @@ def expense_detail(request, expense_id: int):
 # ---------------------------------------------------------------------------
 
 @api_view(["GET", "POST"])
+@permission_classes([AllowAny])
 def services(request):
     if request.method == "GET":
         return Response([{"id": s.id, "name": s.name} for s in service_catalog.get_all()])
+    if not request.user.is_authenticated:
+        return Response({"detail": "Authentication credentials were not provided."}, status=status.HTTP_401_UNAUTHORIZED)
     if not request.data.get("name"):
         return Response({"error": "name required"}, status=status.HTTP_400_BAD_REQUEST)
     return Response({"id": service_catalog.create(request.data["name"])}, status=status.HTTP_201_CREATED)
@@ -465,9 +469,12 @@ def service_detail(request, service_id: int):
 
 
 @api_view(["GET", "POST"])
+@permission_classes([AllowAny])
 def order_types(request):
     if request.method == "GET":
         return Response([{"id": t.id, "name": t.name} for t in order_type_service.get_all()])
+    if not request.user.is_authenticated:
+        return Response({"detail": "Authentication credentials were not provided."}, status=status.HTTP_401_UNAUTHORIZED)
     if not request.data.get("name"):
         return Response({"error": "name required"}, status=status.HTTP_400_BAD_REQUEST)
     return Response({"id": order_type_service.create(request.data["name"])}, status=status.HTTP_201_CREATED)
