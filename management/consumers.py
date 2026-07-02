@@ -132,3 +132,25 @@ class OrderConsumer(AsyncWebsocketConsumer):
             'type': 'review.deleted',
             'review_id': review_id
         }))
+
+    # Participation Events
+    async def participation_created(self, event):
+        participation = event['participation']
+        await self.send(text_data=json.dumps({
+            'type': 'participation.created',
+            'participation': participation
+        }))
+
+    async def participation_updated(self, event):
+        participation = event['participation']
+        await self.send(text_data=json.dumps({
+            'type': 'participation.updated',
+            'participation': participation
+        }))
+
+    async def participation_deleted(self, event):
+        await self.send(text_data=json.dumps({
+            'type': 'participation.deleted',
+            'participation_id': event['participation_id'],
+            'campaign_id': event['campaign_id']
+        }))

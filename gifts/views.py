@@ -63,6 +63,12 @@ class CampaignViewSet(viewsets.ModelViewSet):
             )
             if not created:
                 return Response({'detail': 'Siz öňden gatnaşyjy'}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Broadcast participation_created
+            from management.ws_utils import broadcast_order_event
+            p_data = CampaignParticipationSerializer(participation, context={'request': request}).data
+            p_data['campaign_title'] = campaign.title
+            broadcast_order_event("participation_created", {"participation": p_data})
         else:
             participation = CampaignParticipation.objects.create(
                 campaign=campaign,
@@ -71,6 +77,12 @@ class CampaignViewSet(viewsets.ModelViewSet):
                 email=email,
                 note=note,
             )
+
+            # Broadcast participation_created
+            from management.ws_utils import broadcast_order_event
+            p_data = CampaignParticipationSerializer(participation, context={'request': request}).data
+            p_data['campaign_title'] = campaign.title
+            broadcast_order_event("participation_created", {"participation": p_data})
 
         return Response(CampaignParticipationSerializer(participation, context={'request': request}).data,
                         status=status.HTTP_201_CREATED)
@@ -86,3 +98,27 @@ class CampaignParticipationViewSet(viewsets.ModelViewSet):
     queryset = CampaignParticipation.objects.all()
     serializer_class = CampaignParticipationSerializer
     permission_classes = [permissions.AllowAny]
+
+    def perform_create(self, serializer):
+        instance = serializer.save()
+        from management.ws_utils import broadcast_order_event
+        p_data = serializer.data
+        p_data['campaign_title'] = instance.campaign.title
+        broadcast_order_event("participation_created", {"participation": p_data})
+
+    def perform_update(self, serializer):
+        instance = serializer.save()
+        from management.ws_utils import broadcast_order_event
+        p_data = serializer.data
+        p_data['campaign_title'] = instance.campaign.title
+        broadcast_order_event("participation_updated", {"participation": p_data})
+
+    def perform_destroy(self, instance):
+        participation_id = instance.id
+        campaign_id = instance.campaign_id
+        instance.delete()
+        from management.ws_utils import broadcast_order_event
+        broadcast_order_event("participation_deleted", {
+            "participation_id": participation_id,
+            "campaign_id": campaign_id
+        })
