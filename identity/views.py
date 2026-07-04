@@ -71,10 +71,10 @@ def _send_otp_email(user, code):
     try:
         send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [user.email], fail_silently=False)
         print(f"Email sent successfully to {user.email}")
-        return True
+        return True, ""
     except Exception as e:
         print(f"CRITICAL: Email sending failed: {e}")
-        return False
+        return False, str(e)
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
@@ -103,7 +103,9 @@ def register_view(request):
             OTPCode.objects.create(user=user, code=code, expires_at=expires)
             
             # Send Email
-            _send_otp_email(user, code)
+            success, err_msg = _send_otp_email(user, code)
+            if not success:
+                raise Exception(f"E-poçta ugratmak başartmady: {err_msg}")
 
         return Response({
             "message": "Tassyklama kody e-poçtaňyza ugradyldy",
@@ -111,7 +113,7 @@ def register_view(request):
         }, status=status.HTTP_201_CREATED)
     except Exception as e:
         print(f"Registration error: {e}")
-        return Response({"error": "Hasaba alynmakda ýalňyşlyk ýüze çykdy"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
@@ -177,9 +179,10 @@ def resend_otp_view(request):
     expires = timezone.now() + timedelta(minutes=10)
     OTPCode.objects.create(user=user, code=code, expires_at=expires)
     
-    if _send_otp_email(user, code):
+    success, err_msg = _send_otp_email(user, code)
+    if success:
         return Response({"message": "Täze kod ugradyldy"})
-    return Response({"error": "E-poçta ugratmak başartmady"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    return Response({"error": f"E-poçta ugratmak başartmady: {err_msg}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
@@ -390,3 +393,177 @@ def change_password_view(request):
     user.set_password(new_password)
     user.save()
     return Response({"message": "Parol üstünlikli çalşyldy!"})
+
+@api_view(['GET', 'DELETE'])
+@permission_classes([IsAuthenticated])
+def admin_logs_view(request):
+    is_admin = request.user.is_superuser or (getattr(request.user, 'role', None) and request.user.role.name == 'Admin')
+    if not is_admin:
+        return Response({"error": "Sizde bu amaly ýerine ýetirmäge ygtyýar ýok"}, status=status.HTTP_403_FORBIDDEN)
+    
+    import os
+    log_file_path = os.path.join(settings.BASE_DIR, 'api_requests.log')
+    
+    if request.method == 'GET':
+        if not os.path.exists(log_file_path):
+            if request.query_params.get("export") == "csv":
+                from django.http import HttpResponse
+                response = HttpResponse('', content_type='text/csv')
+                response['Content-Disposition'] = 'attachment; filename="sistem_loglary.csv"'
+                return response
+            return Response([])
+            
+        try:
+            logs = []
+            with open(log_file_path, 'r', encoding='utf-8') as f:
+                lines = f.readlines()
+                
+                for line in reversed(lines):
+                    line = line.strip()
+                    if not line:
+                        continue
+                    parts = line.split(' ', 3)
+                    if len(parts) >= 4:
+                        level = parts[0]
+                        date = parts[1]
+                        time_part = parts[2].split(',')[0]
+                        timestamp = f"{date} {time_part}"
+                        rest = parts[3]
+                        
+                        if rest.startswith('middleware '):
+                            rest = rest[11:]
+                            
+                        rest_parts = [p.strip() for p in rest.split('|')]
+                        log_data = {
+                            "level": level,
+                            "timestamp": timestamp,
+                        }
+                        for rp in rest_parts:
+                            if ':' in rp:
+                                k, v = rp.split(':', 1)
+                                log_data[k.strip().lower()] = v.strip()
+                        
+                        logs.append(log_data)
+            
+            if request.query_params.get("export") == "csv":
+                import csv
+                from django.http import HttpResponse
+                response = HttpResponse(content_type='text/csv')
+                response['Content-Disposition'] = 'attachment; filename="sistem_loglary.csv"'
+                
+                writer = csv.writer(response)
+                writer.writerow(['Wagty', 'Derejesi', 'Ulanyjy', 'Metod', 'API Ýoly', 'Status', 'Işleme Möhleti'])
+                for log in logs:
+                    writer.writerow([
+                        log.get('timestamp', ''),
+                        log.get('level', ''),
+                        log.get('user', ''),
+                        log.get('method', ''),
+                        log.get('path', ''),
+                        log.get('status', ''),
+                        log.get('duration', '')
+                    ])
+                return response
+                
+            return Response(logs)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    elif request.method == 'DELETE':
+        action = request.data.get("action")
+        if not action:
+            return Response({"error": "Hereket görkezilmedi"}, status=status.HTTP_400_BAD_REQUEST)
+            
+        if not os.path.exists(log_file_path):
+            return Response({"message": "Log faýly tapylmady, pozulmaly zat ýok"})
+            
+        try:
+            if action == 'delete_all':
+                with open(log_file_path, 'w', encoding='utf-8') as f:
+                    f.write('')
+                return Response({"message": "Ähli log ýazgylary pozuldy"})
+                
+            elif action == 'delete_by_date':
+                start_date = request.data.get("start_date")
+                end_date = request.data.get("end_date")
+                if not start_date or not end_date:
+                    return Response({"error": "Sene aralygy görkezilmedi"}, status=status.HTTP_400_BAD_REQUEST)
+                
+                remaining_lines = []
+                with open(log_file_path, 'r', encoding='utf-8') as f:
+                    lines = f.readlines()
+                    
+                for line in lines:
+                    line_stripped = line.strip()
+                    if not line_stripped:
+                        continue
+                    parts = line_stripped.split(' ', 3)
+                    if len(parts) >= 2:
+                        date_str = parts[1]
+                        if start_date <= date_str <= end_date:
+                            continue
+                    remaining_lines.append(line)
+                    
+                with open(log_file_path, 'w', encoding='utf-8') as f:
+                    f.writelines(remaining_lines)
+                    
+                return Response({"message": f"{start_date} we {end_date} aralygyndaky log ýazgylary pozuldy"})
+                
+            elif action == 'delete_selected':
+                selected_logs = request.data.get("selected_logs", [])
+                if not selected_logs:
+                    return Response({"error": "Saýlanan loglar ugradylmady"}, status=status.HTTP_400_BAD_REQUEST)
+                
+                remaining_lines = []
+                with open(log_file_path, 'r', encoding='utf-8') as f:
+                    lines = f.readlines()
+                    
+                for line in lines:
+                    line_stripped = line.strip()
+                    if not line_stripped:
+                        continue
+                    parts = line_stripped.split(' ', 3)
+                    if len(parts) >= 4:
+                        level = parts[0]
+                        date = parts[1]
+                        time_part = parts[2].split(',')[0]
+                        timestamp = f"{date} {time_part}"
+                        rest = parts[3]
+                        if rest.startswith('middleware '):
+                            rest = rest[11:]
+                        rest_parts = [p.strip() for p in rest.split('|')]
+                        log_data = {
+                            "level": level,
+                            "timestamp": timestamp,
+                        }
+                        for rp in rest_parts:
+                            if ':' in rp:
+                                k, v = rp.split(':', 1)
+                                log_data[k.strip().lower()] = v.strip()
+                        
+                        # Match check
+                        matched = False
+                        for sel in selected_logs:
+                            if (
+                                log_data.get("timestamp") == sel.get("timestamp") and
+                                log_data.get("method") == sel.get("method") and
+                                log_data.get("path") == sel.get("path") and
+                                log_data.get("user") == sel.get("user") and
+                                str(log_data.get("status")) == str(sel.get("status"))
+                            ):
+                                matched = True
+                                break
+                        if matched:
+                            continue
+                    remaining_lines.append(line)
+                    
+                with open(log_file_path, 'w', encoding='utf-8') as f:
+                    f.writelines(remaining_lines)
+                    
+                return Response({"message": "Saýlanan log ýazgylary pozuldy"})
+                
+            else:
+                return Response({"error": "Nädogry hereket görkezildi"}, status=status.HTTP_400_BAD_REQUEST)
+                
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

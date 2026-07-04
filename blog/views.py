@@ -71,12 +71,21 @@ def blogs(request):
 
 @api_view(["GET", "PUT", "DELETE"])
 @permission_classes([AllowAny])
-def blog_detail(request, blog_id: int):
-    if request.method == "GET":
+def blog_detail(request, blog_identifier: str):
+    # Try to resolve post by ID first if identifier is integer, otherwise by slug
+    if blog_identifier.isdigit():
+        blog_id = int(blog_identifier)
         post = blog_service.get_by_id(blog_id)
-        if not post:
-            return Response({"error": "not found"}, status=status.HTTP_404_NOT_FOUND)
+    else:
+        post = blog_service.get_by_slug(blog_identifier)
+        blog_id = post.id if post else None
+
+    if not post:
+        return Response({"error": "not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    if request.method == "GET":
         return Response(_blog_dict(post))
+        
     if request.method == "PUT":
         serializer = BlogPostSerializer(data=request.data, partial=True)
         if not serializer.is_valid():
@@ -88,6 +97,8 @@ def blog_detail(request, blog_id: int):
         if not updated:
             return Response({"error": "not found"}, status=status.HTTP_404_NOT_FOUND)
         return Response({"updated": True})
+        
+    # DELETE
     deleted = blog_service.delete(blog_id)
     if not deleted:
         return Response({"error": "not found"}, status=status.HTTP_404_NOT_FOUND)

@@ -25,6 +25,17 @@ class IdentityTests(APITestCase):
         self.assertFalse(user.is_active)
         self.assertTrue(OTPCode.objects.filter(user=user).exists())
 
+    from unittest.mock import patch
+    @patch('identity.views.send_mail')
+    def test_registration_email_failure_rollback(self, mock_send_mail):
+        mock_send_mail.side_effect = Exception("SMTP Connection Timeout")
+        url = reverse('register')
+        response = self.client.post(url, self.user_data)
+        self.assertEqual(response.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
+        self.assertIn("SMTP Connection Timeout", response.data['error'])
+        # The user should NOT be created in the database due to rollback!
+        self.assertFalse(User.objects.filter(username='testuser').exists())
+
     def test_login_failed_if_inactive(self):
         user = User.objects.create_user(**self.user_data)
         user.is_active = False
@@ -187,6 +198,22 @@ class AdminUserViewSetTests(APITestCase):
         self.admin = User.objects.create_user(
             username='admin', email='admin@example.com', password='pass123', is_active=True
         )
+        import os
+        from django.conf import settings
+        self.log_file_path = os.path.join(settings.BASE_DIR, 'api_requests.log')
+        self.log_backup_content = None
+        if os.path.exists(self.log_file_path):
+            with open(self.log_file_path, 'r', encoding='utf-8') as f:
+                self.log_backup_content = f.read()
+
+    def tearDown(self):
+        import os
+        if hasattr(self, 'log_backup_content'):
+            if self.log_backup_content is not None:
+                with open(self.log_file_path, 'w', encoding='utf-8') as f:
+                    f.write(self.log_backup_content)
+            elif os.path.exists(self.log_file_path):
+                os.remove(self.log_file_path)
 
     def test_list_users_requires_auth(self):
         response = self.client.get('/api/users/')
@@ -206,3 +233,97 @@ class AdminUserViewSetTests(APITestCase):
         created = User.objects.get(username='newuser')
         self.assertTrue(created.check_password('NewPass123'))
         self.assertEqual(created.role.name, 'Staff')
+
+    def test_admin_logs_requires_auth(self):
+        response = self.client.get('/api/admin/logs')
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_admin_logs_requires_admin_privilege(self):
+        normal_user = User.objects.create_user(
+            username='normal', email='normal@example.com', password='pass123', is_active=True
+        )
+        self.client.force_authenticate(normal_user)
+        response = self.client.get('/api/admin/logs')
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_admin_logs_success(self):
+        self.admin.role = self.role
+        self.admin.save()
+        self.client.force_authenticate(self.admin)
+        response = self.client.get('/api/admin/logs')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIsInstance(response.data, list)
+
+    def test_admin_logs_csv_export(self):
+        self.admin.role = self.role
+        self.admin.save()
+        self.client.force_authenticate(self.admin)
+        # Write some mock logs
+        with open(self.log_file_path, 'w', encoding='utf-8') as f:
+            f.write("INFO 2026-07-03 14:52:17,215 middleware User: admin | Method: POST | Path: /api/test | Status: 200 | Duration: 0.005s\n")
+        
+        response = self.client.get('/api/admin/logs', {'export': 'csv'})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.has_header('Content-Disposition'))
+        self.assertIn('sistem_loglary.csv', response['Content-Disposition'])
+        self.assertIn(b'admin', response.content)
+        self.assertIn(b'POST', response.content)
+
+    def test_admin_logs_delete_all(self):
+        self.admin.role = self.role
+        self.admin.save()
+        self.client.force_authenticate(self.admin)
+        with open(self.log_file_path, 'w', encoding='utf-8') as f:
+            f.write("INFO 2026-07-03 14:52:17,215 middleware User: admin | Method: POST | Path: /api/test | Status: 200 | Duration: 0.005s\n")
+        
+        response = self.client.delete('/api/admin/logs', {'action': 'delete_all'}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        with open(self.log_file_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        self.assertEqual(content, '')
+
+    def test_admin_logs_delete_by_date(self):
+        self.admin.role = self.role
+        self.admin.save()
+        self.client.force_authenticate(self.admin)
+        with open(self.log_file_path, 'w', encoding='utf-8') as f:
+            f.write("INFO 2026-07-01 12:00:00,000 middleware User: admin | Method: POST | Path: /api/1 | Status: 200 | Duration: 0.005s\n")
+            f.write("INFO 2026-07-02 12:00:00,000 middleware User: admin | Method: POST | Path: /api/2 | Status: 200 | Duration: 0.005s\n")
+            f.write("INFO 2026-07-03 12:00:00,000 middleware User: admin | Method: POST | Path: /api/3 | Status: 200 | Duration: 0.005s\n")
+        
+        response = self.client.delete('/api/admin/logs', {
+            'action': 'delete_by_date',
+            'start_date': '2026-07-02',
+            'end_date': '2026-07-03'
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        with open(self.log_file_path, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+        self.assertEqual(len(lines), 1)
+        self.assertIn('/api/1', lines[0])
+
+    def test_admin_logs_delete_selected(self):
+        self.admin.role = self.role
+        self.admin.save()
+        self.client.force_authenticate(self.admin)
+        with open(self.log_file_path, 'w', encoding='utf-8') as f:
+            f.write("INFO 2026-07-03 12:00:00,000 middleware User: admin | Method: POST | Path: /api/1 | Status: 200 | Duration: 0.005s\n")
+            f.write("INFO 2026-07-03 13:00:00,000 middleware User: admin | Method: POST | Path: /api/2 | Status: 201 | Duration: 0.005s\n")
+        
+        response = self.client.delete('/api/admin/logs', {
+            'action': 'delete_selected',
+            'selected_logs': [
+                {
+                    'timestamp': '2026-07-03 13:00:00',
+                    'method': 'POST',
+                    'path': '/api/2',
+                    'user': 'admin',
+                    'status': '201'
+                }
+            ]
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        with open(self.log_file_path, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+        self.assertEqual(len(lines), 1)
+        self.assertIn('/api/1', lines[0])

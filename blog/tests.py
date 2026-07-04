@@ -105,3 +105,20 @@ class BlogEndpointsTests(TestCase):
         self.assertEqual(post1.slug, "collision-test")
         self.assertEqual(post2.slug, "collision-test-1")
         self.assertEqual(post3.slug, "collision-test-2")
+
+    def test_detail_update_delete_by_slug(self):
+        resp = self.client.get(f"/api/blogs/{self.post.slug}")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()["title"], "First")
+        
+        payload = {"title": "Updated By Slug", "media": []}
+        resp = self.client.put(
+            f"/api/blogs/{self.post.slug}", data=json.dumps(payload), content_type="application/json"
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.post.refresh_from_db()
+        self.assertEqual(self.post.title, "Updated By Slug")
+        
+        resp = self.client.delete(f"/api/blogs/{self.post.slug}")
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(BlogPost.objects.filter(slug="updated-by-slug").exists())

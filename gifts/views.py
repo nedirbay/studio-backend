@@ -36,7 +36,8 @@ class CampaignViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['get', 'post'], permission_classes=[permissions.AllowAny])
     def join(self, request, pk=None):
-        campaign = self.get_object()
+        from django.shortcuts import get_object_or_404
+        campaign = get_object_or_404(Campaign.objects.all(), pk=pk)
 
         if request.method == 'GET':
             qs = campaign.participants.all().order_by('-created_at')[:200]
