@@ -14,8 +14,11 @@ class CategoryService:
 
 
 class ProductService:
-    def get_all(self):
-        return list(Product.objects.all().order_by('-created_at').select_related('category').prefetch_related('media'))
+    def get_all(self, limit: Optional[int] = None):
+        products = Product.objects.all().order_by('-created_at', '-id').select_related('category').prefetch_related('media')
+        if limit is not None:
+            products = products[:limit]
+        return list(products)
 
     def get_by_id(self, product_id: int) -> Optional[Product]:
         return Product.objects.filter(id=product_id).select_related('category').prefetch_related('media').first()

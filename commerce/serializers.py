@@ -6,7 +6,7 @@ from commerce.models import Category, Product, ProductMedia, Brand
 class CategorySerializer(serializers.Serializer):
     id = serializers.IntegerField(read_only=True)
     name = serializers.CharField(max_length=150)
-    slug = serializers.CharField(max_length=150, required=False)
+    slug = serializers.CharField(max_length=150, read_only=True)
     icon = serializers.CharField(max_length=50, required=False)
     count = serializers.IntegerField(required=False)
 
@@ -14,7 +14,7 @@ class CategorySerializer(serializers.Serializer):
 class BrandSerializer(serializers.Serializer):
     id = serializers.IntegerField(read_only=True)
     name = serializers.CharField(max_length=150)
-    slug = serializers.CharField(max_length=150, required=False)
+    slug = serializers.CharField(max_length=150, read_only=True)
     logo_url = serializers.CharField(max_length=255, required=False, allow_null=True, allow_blank=True)
 
 

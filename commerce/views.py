@@ -130,12 +130,8 @@ def categories(request):
     if not serializer.is_valid():
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     validated = serializer.validated_data
-    slug = validated.get("slug")
-    if slug and Category.objects.filter(slug=slug).exists():
-        return Response({"slug": ["This slug is already in use."]}, status=status.HTTP_400_BAD_REQUEST)
     cat = Category.objects.create(
         name=validated["name"],
-        slug=validated.get("slug"),
         icon=validated.get("icon")
     )
     return Response(_category_dict(cat), status=status.HTTP_201_CREATED)
@@ -159,11 +155,6 @@ def category_detail(request, category_id: int):
         validated = serializer.validated_data
         if "name" in validated:
             cat.name = validated["name"]
-        if "slug" in validated:
-            slug = validated["slug"]
-            if Category.objects.filter(slug=slug).exclude(id=category_id).exists():
-                return Response({"slug": ["This slug is already in use."]}, status=status.HTTP_400_BAD_REQUEST)
-            cat.slug = slug
         if "icon" in validated:
             cat.icon = validated["icon"]
         cat.save()
@@ -178,7 +169,17 @@ def category_detail(request, category_id: int):
 @permission_classes([AllowAny])
 def products(request):
     if request.method == "GET":
-        return Response([_product_list_dict(p, request) for p in product_service.get_all()])
+        raw_limit = request.query_params.get("limit")
+        limit = None
+        if raw_limit is not None:
+            try:
+                limit = int(raw_limit)
+                if limit < 1:
+                    raise ValueError
+            except (TypeError, ValueError):
+                return Response({"error": "limit must be a positive integer"}, status=status.HTTP_400_BAD_REQUEST)
+        products_list = product_service.get_all(limit=limit)
+        return Response([_product_list_dict(p, request) for p in products_list])
     serializer = ProductSerializer(data=request.data)
     if not serializer.is_valid():
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -198,6 +199,18 @@ def products(request):
     media_data = validated.get("media", [])
     new_id = product_service.create(product_data, media_data)
     return Response({"id": new_id}, status=status.HTTP_201_CREATED)
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def product_catalog(request):
+    return Response([_product_list_dict(p, request) for p in product_service.get_all()])
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def latest_products(request):
+    return Response([_product_list_dict(p, request) for p in product_service.get_all(limit=4)])
 
 
 @api_view(["GET", "PUT", "DELETE"])
@@ -249,12 +262,8 @@ def brands(request):
     if not serializer.is_valid():
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     validated = serializer.validated_data
-    slug = validated.get("slug")
-    if slug and Brand.objects.filter(slug=slug).exists():
-        return Response({"slug": ["This slug is already in use."]}, status=status.HTTP_400_BAD_REQUEST)
     brand = Brand.objects.create(
         name=validated["name"],
-        slug=validated.get("slug"),
         logo_url=validated.get("logo_url")
     )
     return Response(_brand_dict(brand), status=status.HTTP_201_CREATED)
@@ -278,11 +287,6 @@ def brand_detail(request, brand_id: int):
         validated = serializer.validated_data
         if "name" in validated:
             brand.name = validated["name"]
-        if "slug" in validated:
-            slug = validated["slug"]
-            if Brand.objects.filter(slug=slug).exclude(id=brand_id).exists():
-                return Response({"slug": ["This slug is already in use."]}, status=status.HTTP_400_BAD_REQUEST)
-            brand.slug = slug
         if "logo_url" in validated:
             brand.logo_url = validated["logo_url"]
         brand.save()
